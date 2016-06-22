@@ -73,18 +73,36 @@ function string:from_hex()
 end
 
 
-local MsgTest = {
-}
+local FlatBuffersMethods = { }
 
-MsgTest.__index = MsgTest
+--- helper function
+function FlatBuffersMethods:dump()
+  return ('{\n name: %s,\n value: %d\n}'):format(self.name, self.value)
+end
 
-function MsgTest.create(buf)
-  local self = setmetatable({}, MsgTest)
-  self.buf = buf
-  return self
+
+local function FlatBuffersIndex(self, k)
+  --- dynamic generate with schema
+  if k == 'name' then
+    return 'Lua'
+  elseif k == 'value' then
+    return 1
+  else
+    return FlatBuffersMethods[k]
+  end
+end
+
+local FlatBuffers = { __index = FlatBuffersIndex }
+
+function FlatBuffers.create(schema, buf)
+  return setmetatable({ schema, buf }, FlatBuffers)
 end
 
 local f = io.open(arg[1] or 'bin_out/test.lfb', 'rb')
 if f then
-  io.stdout:write(f:read 'a':xxd())
+  local buf = f:read 'a'
+  io.stdout:write(buf:xxd())
+  local fbmsg = FlatBuffers.create(schema, buf)
+  print(fbmsg:dump())
 end
+
