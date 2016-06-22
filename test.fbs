@@ -1,0 +1,12 @@
+// david feng Wed 18:32 Jun 22
+
+namespace lfb;
+
+table Test {
+  name  : string;
+  value : int;
+}
+
+root_type Test;
+
+file_extension "lfb";
