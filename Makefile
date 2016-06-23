@@ -16,11 +16,14 @@ endif
 
 .PHONY: all test clean
 
-all: buffer.so
+all: buffer.so inspect.lua
 	@./test.lua
 
 buffer.so: buflib.c
 	$(CC) $(SHARED_LIB) -o $@ $(CFLAGS) $<
+
+inspect.lua :
+	wget https://raw.githubusercontent.com/kikito/inspect.lua/master/inspect.lua
 
 clean:
 	rm -f buffer.so

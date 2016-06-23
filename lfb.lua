@@ -1,88 +1,70 @@
 #!/usr/bin/env lua53
 
-
---- xxd style string hex dump
-function string:xxd()
-
-  local non_print_pattern = '%c' -- or use '%G'
-
-  local max_width = 8
-  local width = 1
-  local address = 0
-
-  local line = {}
-
-  local s = (self:gsub('(..)', function (c)
-    if width == max_width then
-
-      line[max_width] = c
-
-      address = address + max_width * 2
-      width = 1
-
-      local b1, b2 = c:byte(1, 2)
-      return ('%02x%02x  %s\n'):format(b1, b2,
-        table.concat(line):gsub(non_print_pattern, '.'))
-
-    elseif width == 1 then
-
-      line[1] = c
-
-      width = 2
-
-      return ('%08x: %02x%02x '):format(address, c:byte(1, 2))
-
-    else
-
-      line[width] = c
-
-      width = width + 1
-
-      return ('%02x%02x '):format(c:byte(1, 2))
-    end
-
-  end))
-
-  if #self % 2 ~= 0 then
-    s = s:gsub('(.)$', function (c)
-      return ('%02x'):format(c:byte())
-    end)
-  end
-
-  if #self == 1 then
-    s = ('%08x: %02x'):format(0, self:byte())
-  end
-
-  local rm = #self % (max_width * 2)
-  if rm ~= 0 then
-    local start_index = 10 + 5 * 8 + 1
-    local line_width = start_index + 16 + 1
-    local rc = #s % line_width
-    rc = start_index - rc
-    s = s .. (' '):rep(rc)
-      .. self:sub(-rm, -1):gsub(non_print_pattern, '.') .. '\n'
-  end
-
-  return s
-end
-
-function string:from_hex()
-  return self:gsub('%X', ''):gsub('(..)', function (bs)
-    return string.char(tonumber('0x' .. bs))
-  end)
-end
+local string  = require 'stringx'
+local inspect = require 'inspect'
+string.read   = require 'buffer'.read
 
 
 local FlatBuffersMethods = { }
 
---- helper function
-function FlatBuffersMethods:dump()
-  return ('{\n name: %s,\n value: %d\n}'):format(self.name, self.value)
+--- decode root object from buf
+function FlatBuffersMethods:decode()
+  local buf = self[1]
+  local schema = self[2]
+
+  -- > 大端
+  -- < 小端
+  -- = native
+  --
+  -- $ 中间变量，通过 %n 来使用用，不作为结果返回
+  -- @ 创建引用，此值后续可以通过 %n 来引用
+  --
+  -- %n 引用解析结果
+  --
+  -- i/I[n] 有符号整数
+  -- u/U[n] 无符号整数
+  -- f float 32
+  -- d float 64, double
+  -- s[n] 长度开始的字符串，默认是4字节
+  -- b 1字节的bool值
+  --
+  -- +[n] 当前指针向前移动n个字节
+  -- -[n] 当前指针向后移动n个字节
+  --
+  -- *[n] 下一项操作 重复n次(todo 复合操作)
+  local ops = {
+    '<',          -- 设置小端模式
+    '$u4',        -- root offset
+    '+ %1',       -- goto root
+    '$u4',        -- vt offset
+    '- %2',       -- goto vt
+    '$u2',        -- vt size
+    'u2',         -- object size
+    '*($3-4)u2', -- read all field
+  }
+  local result = table.pack(buf:read(table.concat(ops)))
+  for i = 1, result.n do
+    print(('result %d is: '):format(i), result[i])
+  end
+
+  return self
 end
 
+--- helper function
+function FlatBuffersMethods:dump()
+  local self_buf = self[1]
+  local self_schema = self[2]
+  self[1] = nil
+  self[2] = nil
+  local r = inspect(self)
+  self[1] = self_buf
+  self[2] = self_schema
+  return ('\n[schema:]\n\n%s\n\n%s\n%s'):format(self_schema, self_buf:xxd(), r)
+end
 
 local function FlatBuffersIndex(self, k)
   --- dynamic generate with schema
+
   if k == 'name' then
     return 'Lua'
   elseif k == 'value' then
@@ -94,17 +76,70 @@ end
 
 local FlatBuffers = { __index = FlatBuffersIndex }
 
-function FlatBuffers.create(schema, buf)
-  return setmetatable({ schema, buf }, FlatBuffers)
+function FlatBuffers.create(buf, schema)
+  return setmetatable({ buf, schema }, FlatBuffers):decode()
 end
 
-local f = io.open(arg[1] or 'bin_out/test.lfb', 'rb')
-if f then
-  local buf = f:read 'a'
-  io.stdout:write(buf:xxd())
-  local fbmsg = FlatBuffers.create(schema, buf)
+local function test()
+  --[[
+  local f = io.open(arg[1] or 'bin_out/test.lfb', 'rb')
+  if f then
+    local buf = f:read 'a'
+    io.stdout:write(buf:xxd())
+    local fbmsg = FlatBuffers.create(buf, schema)
+    print(fbmsg:dump())
+  end
+  --]]
+  local buf_s = [[
+    0c00 0000 0800 0c00 0400 0800 0800 0000
+    0800 0000 0100 0000 0300 0000 4c75 6100
+  ]]
+
+  local c1 = '< u4 +12 i4'
+  local c2 = '< u4 +12 i4 -8 u2'
+
+  local result = table.pack(buf_s:from_hex():read(c1))
+  for i = 1, result.n do
+    print(('result %d is: '):format(i), result[i])
+  end
+
+  --[[
+  local schema = 'TODO'
+  local fbmsg = FlatBuffers.create(buf_s:from_hex(), schema)
   print(fbmsg:dump())
+  --]]
 end
 
-local buffer = require 'buffer'
-print(buffer)
+test()
+
+return FlatBuffers
+
+
+--[[
+00000000: 0c00 0000 0800 0c00 0400 0800 0800 0000  ................
+          ^-------- ^--- ^--- ^--- ^--- ^--------
+          |         |    |    |    |    | object
+          |         |    |    |    |    | object vt offset :int32
+          |         |    |    |    |
+          |         |    |    |    | 2nd field
+          |         |    |    |
+          |         |    |    | 1st field
+          |         |    |
+          |         |    | object size 12 byte (4B vt + 4B string + 4B int)
+          |         |
+          |         | vtable size :uint16 所有的vtable成员都是这个长度
+          |
+          | root object offset 12:uint32
+
+00000010: 0800 0000 0100 0000 0300 0000 4c75 6100  ............Lua.
+          ^-------- ^-------- ^------------------
+          |         |         |         ^
+          |         |         |         | string body
+          |         |         |
+          |         |         | string header size 3:uint32
+          |         |
+          |         | int field 0x1:int32
+          |
+          | string field offset 8 :uint32
+--]]
+
