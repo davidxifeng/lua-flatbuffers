@@ -95,9 +95,20 @@ local function test()
     0800 0000 0100 0000 0300 0000 4c75 6100
   ]]
 
-  local c1 = '< u4 +12 i4'
-  local c2 = '< u4 +12 i4 -8 u2'
-
+  local c1 = {
+    '<',
+    'u4',
+    '-4',
+    '+12',
+    'i4',
+    '-4',
+    '-8',
+    'u2',
+    'u2',
+    'u2',
+    'u2',
+  }
+  c1 = table.concat(c1)
   local result = table.pack(buf_s:from_hex():read(c1))
   for i = 1, result.n do
     print(('result %d is: '):format(i), result[i])
