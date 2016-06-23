@@ -106,3 +106,5 @@ if f then
   print(fbmsg:dump())
 end
 
+local buffer = require 'buffer'
+print(buffer)
