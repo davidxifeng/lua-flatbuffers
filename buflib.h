@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <alloca.h>
 #include <stdint.h>
 
 #include "lua.h"
