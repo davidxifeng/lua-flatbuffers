@@ -28,30 +28,6 @@
   reference to enum, struct, union
 
 */
-enum kOperation {
-  k_bool,    // boolean
-  k_int,     // ubyte
-  k_float,   // double
-  k_string,  // string without len
-  k_lstring, // string with size
-
-  k_forward,    // 向前移动指针 uint32
-  k_backward,    // 向后移动指针 uint32
-
-  k_dereference,  // 变量解引用
-
-  k_eval,     // 表达式求值
-  k_left,     // 左括号
-  k_right,    // 右括号
-  k_plus,     // +
-  k_minus,    // -
-  k_multiply, // *
-  k_divide,   // /
-
-  k_reference,    // 创建引用 int64
-  k_variable,    // 创建变量 int
-  k_hlt,        // 结束
-};
 
 struct State {
   const char * buffer;        // buffer 首地址
@@ -64,22 +40,16 @@ struct State {
 
   ptrdiff_t    offset;        // buffer寻址偏移
 
-  int64_t      ivalue; // 整型value
-  double       fvalue; // 浮点值
-  size_t       len;
-  const char * svalue;
-
-  int          is_little;     // 小端标记
-  int          repeat;        // 重复标记
+  int          little;     // 小端标记
+  uint32_t     repeat;        // 重复标记
   int          is_eval;       // 是否正在求值
   lua_State  * L;             // userdata
+  int          stack_space;   // check_stack
   int          ret;           // 结果数量
 };
 
-static enum kOperation next_operation(struct State * st);
+static void run_instructions(struct State * st);
 static uint32_t getnum (const char **s, uint32_t df);
-static uint32_t getnum_with_limit (struct State *st, const char **s,
-    uint32_t df, uint32_t min, uint32_t max);
 
 static lua_Integer
 unpackint (struct State *st, const char *str, int islittle, int size, int issigned);

@@ -12,26 +12,24 @@ function FlatBuffersMethods:decode()
   local buf = self[1]
   local schema = self[2]
 
-  -- > 大端
-  -- < 小端
-  -- = native
+  -- > 大端, < 小端, = native
   --
-  -- $ 中间变量，通过 %n 来使用用，不作为结果返回
-  -- @ 创建引用，此值后续可以通过 %n 来引用
+  -- $n 创建中间变量，通过 %n 来使用用，不作为结果返回
+  -- &n 引用，此值后续可以通过 %n 来引用,同时也作为结果返回
+  -- %n 访问变量
   --
-  -- %n 引用解析结果
+  -- +[n|%n|()] 当前指针向前移动n个字节
+  -- -[n|%n|()] 当前指针向后移动n个字节
   --
-  -- i/I[n] 有符号整数
-  -- u/U[n] 无符号整数
+  -- *[n|%n|()] 下一项操作 重复n次(todo 复合操作) n >= 1
+  --
+  -- b[n] bool值 默认1
+  -- i/I[n] 有符号整数 默认4
+  -- u/U[n] 无符号整数 默认4
   -- f float 32
   -- d float 64, double
-  -- s[n] 长度开始的字符串，默认是4字节
-  -- b 1字节的bool值
-  --
-  -- +[n] 当前指针向前移动n个字节
-  -- -[n] 当前指针向后移动n个字节
-  --
-  -- *[n] 下一项操作 重复n次(todo 复合操作)
+  -- s[n] 字符串 没有选项n时是零结尾字符串，存在n时，固定长度字符串, n: [1 - 4]
+  -- c[n] 指定长度的字符串 n [1 - 2^32]
   local ops = {
     '<',          -- 设置小端模式
     '$u4',        -- root offset
@@ -40,7 +38,7 @@ function FlatBuffersMethods:decode()
     '- %2',       -- goto vt
     '$u2',        -- vt size
     'u2',         -- object size
-    '*($3-4)u2', -- read all field
+    '*($3-4)u2',  -- read all field
   }
   local result = table.pack(buf:read(table.concat(ops)))
   for i = 1, result.n do
@@ -91,7 +89,7 @@ local function test()
   end
   --]]
   local buf_s = [[
-    0c00 0000 0800 0c00 0400 0800 0800 0000
+    0c00 0000 0800 0c00 0400 0800 0c00 0000
     0800 0000 0100 0000 0300 0000 4c75 6100
   ]]
 
@@ -103,10 +101,7 @@ local function test()
     'i4',
     '-4',
     '-8',
-    'u2',
-    'u2',
-    'u2',
-    'u2',
+    '*4 u2',
   }
   c1 = table.concat(c1)
   local result = table.pack(buf_s:from_hex():read(c1))
