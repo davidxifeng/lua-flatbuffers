@@ -32,6 +32,47 @@ static uint32_t getnum (const char **s, uint32_t df) {
   }
 }
 
+#define cf \
+  "local tonumber = tonumber\n" \
+  "local args, str = ...\n" \
+  "str = str:gsub('%$(%d+)', function (k)\n" \
+  "  return args[tonumber(k)]\n" \
+  "end)\n" \
+  "return load('return ' .. str, 'cf', 't', {})()\n"
+
+static int64_t get_argument (struct State * st, const char **s, uint32_t df) {
+  if (**s == '[') {
+    const char * p = *s;
+
+    luaL_loadstring(st->L, cf);
+
+    lua_createtable(st->L, 0, 16);
+    lua_getglobal(st->L, "load");
+    lua_setfield(st->L, -2, "load");
+    lua_getglobal(st->L, "tonumber");
+    lua_setfield(st->L, -2, "tonumber");
+    lua_setupvalue(st->L, -2, 1);
+
+    lua_createtable(st->L, 32, 0);
+
+    while (*((*s)++) != ']') {
+      if (**s == '$') {
+        ++(*s);
+        uint32_t idx = getnum(s, 0);
+        if (idx == 0 || idx >= st->index) luaL_error(st->L, "bad variable");
+        lua_pushinteger(st->L, st->variable[idx]);
+        lua_rawseti(st->L, -2, idx);
+      }
+    }
+    lua_pushlstring(st->L, p + 1, *s - p - 2);
+    lua_call(st->L, 2, 1);
+    int64_t r = (int64_t)luaL_checkinteger(st->L, -1);
+    lua_pop(st->L, 1);
+    return r;
+  } else {
+    return getnum(s, df);
+  }
+}
 
 // Read an integer numeral and raises an error if it is larger
 // than the maximum size for integers.
@@ -40,10 +81,10 @@ get_opt_int_size (struct State *st, const char **s,
     uint32_t df, uint32_t min, uint32_t max) {
   uint32_t num = getnum(s, df);
   if (max < num || num < min)
-    luaL_error(st->L, "(%u) out of limits [%u, %u]", num, min, max);
+    luaL_error(st->L, "(%I) out of limits [%I, %I]", num, min, max);
   switch (num) {
     case 0: case 1: case 2: case 4: case 8: break;
-    default: luaL_error(st->L, "invalid integer size (%u)", num);
+    default: luaL_error(st->L, "invalid integer size (%I)", num);
   }
   return num;
 }
@@ -83,6 +124,7 @@ unpackint (struct State *st, const char *str,
 }
 
 #define INIT_MEM_SIZE 32
+#define MEM_GROW_SIZE 16
 #define INIT_STACK_SPACE 32
 #define STACK_GROW_SPACE 16
 
@@ -127,34 +169,58 @@ static void read_boolean(struct State * st, const char **s) {
 static void read_integer(struct State *st, const char **s, int is_sign) {
   uint32_t sz = get_opt_int_size(st, s, 4, 1, 8);
 
+  if (st->create_var == 1) {
+    st->create_var = 0;
+
+    int64_t num = unpackint(st, st->pointer, st->little, sz, is_sign);
+    st->pointer += sz;
+    st->variable[st->index++] = num;
+  } else {
+
+    if (st->create_ref == 1) {
+      st->create_ref = 0;
+
+      int64_t num = unpackint(st, st->pointer, st->little, sz, is_sign);
+      st->variable[st->index++] = num;
+    }
+
+    while (st->repeat-- > 0) {
+      check_stack_space(st);
+      lua_pushinteger(st->L, unpackint(st, st->pointer, st->little, sz, is_sign));
+      st->pointer += sz;
+      st->ret++;
+    }
+  }
+}
+
+static void read_float32(struct State *st) {
   while (st->repeat-- > 0) {
     check_stack_space(st);
-    lua_pushinteger(st->L, unpackint(st, st->pointer, st->little, sz, is_sign));
-    st->pointer += sz;
+    volatile union Ftypes u;
+    copy_with_endian(u.buff, st->pointer, 4, st->little);
+    lua_pushnumber(st->L, (lua_Number)u.f);
+    st->pointer += 4;
     st->ret++;
   }
 }
 
-static void read_float(struct State *st, int size) {
+static void read_float64(struct State *st) {
   while (st->repeat-- > 0) {
     check_stack_space(st);
     volatile union Ftypes u;
-    lua_Number num;
-    copy_with_endian(u.buff, st->pointer, size, st->little);
-    if (size == sizeof(u.f)) num = (lua_Number)u.f;
-    else if (size == sizeof(u.d)) num = (lua_Number)u.d;
-    else num = u.n;
-    lua_pushnumber(st->L, num);
-    st->pointer += size;
+    copy_with_endian(u.buff, st->pointer, 8, st->little);
+    lua_pushnumber(st->L, (lua_Number)u.d);
+    st->pointer += 8;
     st->ret++;
   }
 }
 
 static void read_string(struct State *st, const char **s) {
-  uint32_t sz = get_opt_int_size(st, s, 0, 1, 4);
+  uint32_t sz = get_opt_int_size(st, s, 0, 0, 4);
 
   while (st->repeat -- > 0) {
     check_stack_space(st);
+
     if (sz == 0) {
       size_t slen = strlen(st->pointer);
       lua_pushlstring(st->L, st->pointer, slen);
@@ -170,8 +236,8 @@ static void read_string(struct State *st, const char **s) {
 }
 
 static void read_fixed_string(struct State *st, const char **s) {
-  uint32_t sz = getnum(s, 0);
-  if (sz == 0) luaL_error(st->L, "bad n in 'c[n]' format");
+  uint32_t sz = getnum(s, 1);
+  if (sz == 0) luaL_error(st->L, "bad n in 'c[n]'");
 
   while (st->repeat-- > 0) {
     check_stack_space(st);
@@ -181,9 +247,14 @@ static void read_fixed_string(struct State *st, const char **s) {
   }
 }
 
+
 static void run_instructions(struct State * st) {
   const char * pc = st->instructions;
   char c;
+
+  st->variable = alloca(sizeof(int64_t) * INIT_MEM_SIZE);
+  st->variable[0] = INIT_MEM_SIZE - 1;
+  st->index = 1;
 
   while ((c = *pc++)) {
 
@@ -192,22 +263,38 @@ static void run_instructions(struct State * st) {
       case '>': st->little = 0; goto next_loop;
       case '<': st->little = 1; goto next_loop;
       case '=': st->little = 1; goto next_loop; // TODO native endian check
+
       case '$':
       case '&':
-      case '%':
-      case '+': st->pointer = st->pointer + getnum(&pc, 1); goto next_loop;
-      case '-': st->pointer = st->pointer - getnum(&pc, 1); goto next_loop;
+        {
+          if (*pc != 'u' && *pc != 'i') luaL_error(st->L, "u/i expected after &");
+
+          int64_t cur_size = st->variable[0];
+          if (st->index >= cur_size) {
+            int64_t * ns = alloca(sizeof(int64_t) * (cur_size + MEM_GROW_SIZE));
+            memmove(ns + 1, st->variable + 1, cur_size * sizeof(int64_t));
+            ns[0] = cur_size + MEM_GROW_SIZE;
+            st->variable = ns;
+          }
+          if (c == '$') st->create_var = 1; else st->create_ref = 1;
+          goto next_loop;
+        }
+
+      case '+': st->pointer += get_argument(st, &pc, 1); goto next_loop;
+      case '-': st->pointer -= get_argument(st, &pc, 1); goto next_loop;
       case '*':
         {
-        if (st->repeat > 1) luaL_error(st->L, "duplicate repeat flag");
-        st->repeat = getnum(&pc, 0);
-        if (st->repeat == 0) luaL_error(st->L, "bad repeat times in '*n'");
-        goto next_loop;
+          if (st->repeat > 1) luaL_error(st->L, "duplicate repeat flag");
+          int64_t r = get_argument(st, &pc, 0);
+          if (r <= 0 || r > 1024) luaL_error(st->L, "bad repeat times in '*n'");
+          st->repeat = (uint32_t)r;
+          goto next_loop;
         }
 
       case 'b': read_boolean(st, &pc); goto reset_repeat;
       case 'i': case 'u': read_integer(st, &pc, c == 'i'); goto reset_repeat;
-      case 'f': case 'd': read_float(st, c == 'f' ? 4 : 8); goto reset_repeat;
+      case 'f': read_float32(st); goto reset_repeat;
+      case 'd': read_float64(st); goto reset_repeat;
       case 's': read_string(st, &pc); goto reset_repeat;
       case 'c': read_fixed_string(st, &pc); goto reset_repeat;
       default :
@@ -224,17 +311,13 @@ next_loop:
 
 static int buf_read (lua_State *L) {
   struct State st = {
-    .index = 0, .offset = 0, .repeat = 1, .is_eval = 0,
+    .repeat = 1, .create_ref = 0, .create_var = 0,
     .ret = 0, .L = L, .little = 1, .stack_space = INIT_STACK_SPACE,
   };
 
   st.pointer = st.buffer = luaL_checklstring(L, 1, &st.buffer_size);
   st.instructions = luaL_checkstring(L, 2);
-  st.variable = alloca(sizeof(int64_t) * INIT_MEM_SIZE);
-  if (!st.variable) {
-    return luaL_error(L, "malloc failed");
-  }
-  st.variable[0] = INIT_MEM_SIZE;
+
   luaL_checkstack(L, INIT_STACK_SPACE, NULL);
   run_instructions(&st);
   return st.ret;

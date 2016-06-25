@@ -37,12 +37,11 @@ struct State {
 
   int64_t    * variable;      // 变量数组
   int          index;         // 变量序号
+  int          create_ref;    // &
+  int          create_var;    // $
 
-  ptrdiff_t    offset;        // buffer寻址偏移
-
-  int          little;     // 小端标记
+  int          little;        // 小端标记
   uint32_t     repeat;        // 重复标记
-  int          is_eval;       // 是否正在求值
   lua_State  * L;             // userdata
   int          stack_space;   // check_stack
   int          ret;           // 结果数量

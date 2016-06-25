@@ -89,7 +89,7 @@ local function test()
   end
   --]]
   local buf_s = [[
-    0c00 0000 0800 0c00 0400 0800 0c00 0000
+    0c00 0000 0800 0c00 0400 0800 0800 0000
     0800 0000 0100 0000 0300 0000 4c75 6100
   ]]
 
@@ -105,6 +105,12 @@ local function test()
   }
   c1 = table.concat(c1)
   local result = table.pack(buf_s:from_hex():read(c1))
+  for i = 1, result.n do
+    print(('result %d is: '):format(i), result[i])
+  end
+
+  local s = string.pack('b b b b b b b b', 1,2,3,4,5,6,7,8)
+  result = table.pack(s:read('&u1 &u1 *[$1 + $2 + 1] +[$2] u1'))
   for i = 1, result.n do
     print(('result %d is: '):format(i), result[i])
   end
@@ -148,4 +154,3 @@ return FlatBuffers
           |
           | string field offset 8 :uint32
 --]]
-
