@@ -31,14 +31,14 @@ function FlatBuffersMethods:decode()
   -- s[n] 字符串 没有选项n时是零结尾字符串，存在n时，固定长度字符串, n: [1 - 4]
   -- c[n] 指定长度的字符串 n [1 - 2^32]
   local ops = {
-    '<',          -- 设置小端模式
-    '$u4',        -- root offset
-    '+ %1',       -- goto root
-    '$u4',        -- vt offset
-    '- %2',       -- goto vt
-    '$u2',        -- vt size
-    'u2',         -- object size
-    '*($3-4)u2',  -- read all field
+    '<',             -- 设置小端模式
+    '&u4',           -- root offset
+    '+[$1 - 4]',     -- goto root
+    '&u4',           -- vt offset
+    '-[$2 + 4]',     -- goto vt
+    '&u2',           -- vt size
+    '&u2',           -- object size
+    '*[($3-4)/2]u2', -- read all field
   }
   local result = table.pack(buf:read(table.concat(ops)))
   for i = 1, result.n do
@@ -92,30 +92,7 @@ local function test()
     0c00 0000 0800 0c00 0400 0800 0800 0000
     0800 0000 0100 0000 0300 0000 4c75 6100
   ]]
-
-  local c1 = {
-    '<',
-    'u4',
-    '-4',
-    '+12',
-    'i4',
-    '-4',
-    '-8',
-    '*4 u2',
-  }
-  c1 = table.concat(c1)
-  local result = table.pack(buf_s:from_hex():read(c1))
-  for i = 1, result.n do
-    print(('result %d is: '):format(i), result[i])
-  end
-
-  local s = string.pack('b b b b b b b b', 1,2,3,4,5,6,7,8)
-  result = table.pack(s:read('&u1 &u1 *[$1 + $2 + 1] +[$2] u1'))
-  for i = 1, result.n do
-    print(('result %d is: '):format(i), result[i])
-  end
-
-  --[[
+  -- [[
   local schema = 'TODO'
   local fbmsg = FlatBuffers.create(buf_s:from_hex(), schema)
   print(fbmsg:dump())
@@ -137,9 +114,9 @@ return FlatBuffers
           |         |    |    |
           |         |    |    | 1st field
           |         |    |
-          |         |    | object size 12 byte (4B vt + 4B string + 4B int)
+          |         |    | object size 12 (4B vt + 4B string + 4B int)
           |         |
-          |         | vtable size :uint16 所有的vtable成员都是这个长度
+          |         | vtable size 8 :uint16 所有的vtable成员都是这个长度
           |
           | root object offset 12:uint32
 
