@@ -39,6 +39,7 @@ struct State {
   int          index;         // 变量序号
   int          create_ref;    // &
   int          create_var;    // $
+  int          dont_move;     // =
 
   int          little;        // 小端标记
   uint32_t     repeat;        // 重复标记

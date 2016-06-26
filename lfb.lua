@@ -12,15 +12,15 @@ function FlatBuffersMethods:decode()
   local buf = self[1]
   local schema = self[2]
 
-  -- > 大端, < 小端, = native
+  -- > 大端, < 小端
   --
   -- $n 创建中间变量，通过 %n 来使用用，不作为结果返回
   -- &n 引用，此值后续可以通过 %n 来引用,同时也作为结果返回
   -- %n 访问变量
-  --
   -- +[n|%n|()] 当前指针向前移动n个字节
   -- -[n|%n|()] 当前指针向后移动n个字节
   --
+  -- = 本次读不移动指针
   -- *[n|%n|()] 下一项操作 重复n次(todo 复合操作) n >= 1
   --
   -- b[n] bool值 默认1
@@ -32,13 +32,14 @@ function FlatBuffersMethods:decode()
   -- c[n] 指定长度的字符串 n [1 - 2^32]
   local ops = {
     '<',             -- 设置小端模式
-    '&u4',           -- root offset
-    '-4',            -- move back
+    '=&u4',           -- root offset
     '+$1',           -- goto root
-    '&u4',           -- vt offset
-    '-[$2 + 4]',     -- goto vt
-    '&u2',           -- vt size
-    '&u2',           -- object size
+    '=&u4',           -- vt offset
+    '-[$2]',     -- goto vt
+    '=&u2',           -- vt size
+    '+2',           -- vt size
+    '=&u2',           -- object size
+    '+2',           -- vt size
     '*[($3-4)/2]u2', -- read all field
   }
   local result = table.pack(buf:read(table.concat(ops)))

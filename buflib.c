@@ -152,13 +152,16 @@ static void copy_with_endian (volatile char *dest, volatile const char *src,
   }
 }
 
+#define check_move_pointer(sz) \
+  if (st->dont_move == 1) st->dont_move = 0; else st->pointer += (sz)
+
 static void read_boolean(struct State * st, const char **s) {
   uint32_t sz = get_opt_int_size(st, s, 1, 1, 8);
 
   while (st->repeat-- > 0) {
     check_stack_space(st);
     lua_pushboolean(st->L, unpackint(st, st->pointer, st->little, sz, 0));
-    st->pointer += sz;
+    check_move_pointer(sz);
     st->ret++;
   }
 }
@@ -170,7 +173,7 @@ static void read_integer(struct State *st, const char **s, int is_sign) {
     st->create_var = 0;
 
     int64_t num = unpackint(st, st->pointer, st->little, sz, is_sign);
-    st->pointer += sz;
+    check_move_pointer(sz);
     st->variable[st->index++] = num;
   } else {
 
@@ -184,7 +187,7 @@ static void read_integer(struct State *st, const char **s, int is_sign) {
     while (st->repeat-- > 0) {
       check_stack_space(st);
       lua_pushinteger(st->L, unpackint(st, st->pointer, st->little, sz, is_sign));
-      st->pointer += sz;
+      check_move_pointer(sz);
       st->ret++;
     }
   }
@@ -196,7 +199,7 @@ static void read_float32(struct State *st) {
     volatile union Ftypes u;
     copy_with_endian(u.buff, st->pointer, 4, st->little);
     lua_pushnumber(st->L, (lua_Number)u.f);
-    st->pointer += 4;
+    check_move_pointer(4);
     st->ret++;
   }
 }
@@ -207,7 +210,7 @@ static void read_float64(struct State *st) {
     volatile union Ftypes u;
     copy_with_endian(u.buff, st->pointer, 8, st->little);
     lua_pushnumber(st->L, (lua_Number)u.d);
-    st->pointer += 8;
+    check_move_pointer(8);
     st->ret++;
   }
 }
@@ -221,12 +224,11 @@ static void read_string(struct State *st, const char **s) {
     if (sz == 0) {
       size_t slen = strlen(st->pointer);
       lua_pushlstring(st->L, st->pointer, slen);
-      st->pointer += slen + 1; // skip a terminal zero
+      check_move_pointer(slen + 1); // skip a terminal zero
     } else {
       uint32_t slen = unpackint(st, st->pointer, st->little, sz, 0);
-      st->pointer += sz;
-      lua_pushlstring(st->L, st->pointer, slen);
-      st->pointer += slen;
+      lua_pushlstring(st->L, st->pointer + sz, slen);
+      check_move_pointer(sz + slen);
     }
     st->ret++;
   }
@@ -239,7 +241,7 @@ static void read_fixed_string(struct State *st, const char **s) {
   while (st->repeat-- > 0) {
     check_stack_space(st);
     lua_pushlstring(st->L, st->pointer, sz);
-    st->pointer += sz;
+    check_move_pointer(sz);
     st->ret++;
   }
 }
@@ -259,7 +261,8 @@ static void run_instructions(struct State * st) {
       case ' ': case '\t': case '\r': case '\n': goto next_loop;
       case '>': st->little = 0; goto next_loop;
       case '<': st->little = 1; goto next_loop;
-      case '=': st->little = 1; goto next_loop; // TODO native endian check
+
+      case '=': st->dont_move = 1; goto next_loop;
 
       case '$':
       case '&':
@@ -308,7 +311,7 @@ next_loop:
 
 static int buf_read (lua_State *L) {
   struct State st = {
-    .repeat = 1, .create_ref = 0, .create_var = 0,
+    .repeat = 1, .create_ref = 0, .create_var = 0, .dont_move = 0,
     .ret = 0, .L = L, .little = 1, .stack_space = INIT_STACK_SPACE,
   };
 
