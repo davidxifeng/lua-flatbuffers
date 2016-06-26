@@ -43,18 +43,8 @@ static uint32_t getnum (const char **s, uint32_t df) {
 static int64_t get_argument (struct State * st, const char **s, uint32_t df) {
   if (**s == '[') {
     const char * p = *s;
-
     luaL_loadstring(st->L, cf);
-
-    lua_createtable(st->L, 0, 16);
-    lua_getglobal(st->L, "load");
-    lua_setfield(st->L, -2, "load");
-    lua_getglobal(st->L, "tonumber");
-    lua_setfield(st->L, -2, "tonumber");
-    lua_setupvalue(st->L, -2, 1);
-
     lua_createtable(st->L, 32, 0);
-
     while (*((*s)++) != ']') {
       if (**s == '$') {
         ++(*s);
@@ -64,11 +54,18 @@ static int64_t get_argument (struct State * st, const char **s, uint32_t df) {
         lua_rawseti(st->L, -2, idx);
       }
     }
+
     lua_pushlstring(st->L, p + 1, *s - p - 2);
     lua_call(st->L, 2, 1);
+
     int64_t r = (int64_t)luaL_checkinteger(st->L, -1);
     lua_pop(st->L, 1);
     return r;
+  } else if (**s == '$') {
+    ++(*s);
+    uint32_t idx = getnum(s, 0);
+    if (idx == 0 || idx >= st->index) luaL_error(st->L, "bad variable");
+    return st->variable[idx];
   } else {
     return getnum(s, df);
   }

@@ -33,7 +33,8 @@ function FlatBuffersMethods:decode()
   local ops = {
     '<',             -- 设置小端模式
     '&u4',           -- root offset
-    '+[$1 - 4]',     -- goto root
+    '-4',            -- move back
+    '+$1',           -- goto root
     '&u4',           -- vt offset
     '-[$2 + 4]',     -- goto vt
     '&u2',           -- vt size
