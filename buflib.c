@@ -192,8 +192,8 @@ static void read_integer(struct State *st, const char **s, int is_sign) {
       check_move_pointer(sz);
 
       if (st->in_tb == 0) {
-        check_stack_space(st);
         st->ret++;
+        check_stack_space(st);
       } else {
         lua_rawseti(st->L, -2, st->tb_idx++);
       }
@@ -208,8 +208,8 @@ static void read_float32(struct State *st) {
     check_move_pointer(4);
     lua_pushnumber(st->L, (lua_Number)u.f);
     if (st->in_tb == 0) {
-      check_stack_space(st);
       st->ret++;
+      check_stack_space(st);
     } else {
       lua_rawseti(st->L, -2, st->tb_idx++);
     }
@@ -223,8 +223,8 @@ static void read_float64(struct State *st) {
     check_move_pointer(8);
     lua_pushnumber(st->L, (lua_Number)u.d);
     if (st->in_tb == 0) {
-      check_stack_space(st);
       st->ret++;
+      check_stack_space(st);
     } else {
       lua_rawseti(st->L, -2, st->tb_idx++);
     }
@@ -246,8 +246,8 @@ static void read_string(struct State *st, const char **s) {
     }
 
     if (st->in_tb == 0) {
-      check_stack_space(st);
       st->ret++;
+      check_stack_space(st);
     } else {
       lua_rawseti(st->L, -2, st->tb_idx++);
     }
@@ -262,8 +262,8 @@ static void read_fixed_string(struct State *st, const char **s) {
     lua_pushlstring(st->L, st->pointer, sz);
     check_move_pointer(sz);
     if (st->in_tb == 0) {
-      check_stack_space(st);
       st->ret++;
+      check_stack_space(st);
     } else {
       lua_rawseti(st->L, -2, st->tb_idx++);
     }
@@ -292,9 +292,9 @@ static void run_instructions(struct State * st) {
         {
           if (st->in_tb != 0) luaL_error(st->L, "nested table detected");
           st->in_tb = st->tb_idx = 1;
+          st->ret++;
           check_stack_space(st);
           lua_createtable(st->L, 32, 0);
-          st->ret++;
           goto next_loop;
         }
       case '}':
@@ -328,6 +328,19 @@ static void run_instructions(struct State * st) {
           int64_t r = get_argument(st, &pc, 0);
           if (r <= 0 || r > 1024) luaL_error(st->L, "bad repeat times in '*n'");
           st->repeat = (uint32_t)r;
+          goto next_loop;
+        }
+
+      case '@':
+      case '^':
+        {
+          lua_pushinteger(st->L, st->pointer - st->buffer);
+          if (st->in_tb == 0) {
+            st->ret++;
+            check_stack_space(st);
+          } else {
+            lua_rawseti(st->L, -2, st->tb_idx++);
+          }
           goto next_loop;
         }
 

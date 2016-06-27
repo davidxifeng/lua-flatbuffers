@@ -1,12 +1,20 @@
-// david feng Wed 18:32 Jun 22
-
 namespace lfb;
 
 table Test {
-  name  : string;
-  value : int;
+  f1  : bool;
+  f2  : bool;
+  f3  : short;
+  f4  : ushort;
+  f5  : int;
+  f6  : uint;
+  f7  : float;
+  f8  : long;
+  f9  : ulong;
+  f10 : double;
+  f11 : string;
 }
 
 root_type Test;
 
 file_extension "lfb";
+file_identifier "TEST"; // exactly 4 chars
