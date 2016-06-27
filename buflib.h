@@ -40,6 +40,8 @@ struct State {
   int          create_ref;    // &
   int          create_var;    // $
   int          dont_move;     // =
+  int          in_tb;         // {}
+  int          tb_idx;        // table index
 
   int          little;        // 小端标记
   uint32_t     repeat;        // 重复标记

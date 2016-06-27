@@ -1,6 +1,6 @@
 #!/usr/bin/env lua53
 
-local lfb = require 'lfb'
+local FlatBuffers = require 'lfb'
 
 --[[
 00000000: 0c00 0000 0800 0c00 0400 0800 0800 0000  ................
@@ -35,8 +35,11 @@ local function test()
   local f = io.open(arg[1] or 'bin_out/test.lfb', 'rb')
   if f then
     local buf = f:read 'a'
-    io.stdout:write(buf:xxd())
+    local schema = 'TODO'
     local fbmsg = FlatBuffers.create(buf, schema)
     print(fbmsg:dump())
   end
 end
+
+test()
+

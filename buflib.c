@@ -86,8 +86,6 @@ get_opt_int_size (struct State *st, const char **s,
   return num;
 }
 
-// TODO 依赖 lua_Integer 64位
-
 // Unpack an integer with 'size' bytes and 'islittle' endianness.
 // If size is smaller than the size of a Lua integer and integer
 // is signed, must do sign extension (propagating the sign to the
@@ -126,7 +124,7 @@ unpackint (struct State *st, const char *str,
 #define STACK_GROW_SPACE 16
 
 static void check_stack_space(struct State *st) {
-  if (st->ret >= st->stack_space) {
+  if (st->ret + 2 >= st->stack_space) {
     st->stack_space += STACK_GROW_SPACE;
     luaL_checkstack(st->L, st->stack_space, "too many results");
   }
@@ -153,23 +151,28 @@ static void copy_with_endian (volatile char *dest, volatile const char *src,
 }
 
 #define check_move_pointer(sz) \
-  if (st->dont_move == 1) st->dont_move = 0; else st->pointer += (sz)
+  if (st->dont_move == 0) st->pointer += (sz); else st->dont_move = 0
 
 static void read_boolean(struct State * st, const char **s) {
   uint32_t sz = get_opt_int_size(st, s, 1, 1, 8);
 
   while (st->repeat-- > 0) {
-    check_stack_space(st);
     lua_pushboolean(st->L, unpackint(st, st->pointer, st->little, sz, 0));
     check_move_pointer(sz);
-    st->ret++;
+
+    if (st->in_tb == 0) {
+      st->ret++;
+      check_stack_space(st);
+    } else {
+      lua_rawseti(st->L, -2, st->tb_idx++);
+    }
   }
 }
 
 static void read_integer(struct State *st, const char **s, int is_sign) {
   uint32_t sz = get_opt_int_size(st, s, 4, 1, 8);
 
-  if (st->create_var == 1) {
+  if (st->create_var != 0) {
     st->create_var = 0;
 
     int64_t num = unpackint(st, st->pointer, st->little, sz, is_sign);
@@ -177,7 +180,7 @@ static void read_integer(struct State *st, const char **s, int is_sign) {
     st->variable[st->index++] = num;
   } else {
 
-    if (st->create_ref == 1) {
+    if (st->create_ref != 0) {
       st->create_ref = 0;
 
       int64_t num = unpackint(st, st->pointer, st->little, sz, is_sign);
@@ -185,33 +188,46 @@ static void read_integer(struct State *st, const char **s, int is_sign) {
     }
 
     while (st->repeat-- > 0) {
-      check_stack_space(st);
       lua_pushinteger(st->L, unpackint(st, st->pointer, st->little, sz, is_sign));
       check_move_pointer(sz);
-      st->ret++;
+
+      if (st->in_tb == 0) {
+        check_stack_space(st);
+        st->ret++;
+      } else {
+        lua_rawseti(st->L, -2, st->tb_idx++);
+      }
     }
   }
 }
 
 static void read_float32(struct State *st) {
   while (st->repeat-- > 0) {
-    check_stack_space(st);
     volatile union Ftypes u;
     copy_with_endian(u.buff, st->pointer, 4, st->little);
-    lua_pushnumber(st->L, (lua_Number)u.f);
     check_move_pointer(4);
-    st->ret++;
+    lua_pushnumber(st->L, (lua_Number)u.f);
+    if (st->in_tb == 0) {
+      check_stack_space(st);
+      st->ret++;
+    } else {
+      lua_rawseti(st->L, -2, st->tb_idx++);
+    }
   }
 }
 
 static void read_float64(struct State *st) {
   while (st->repeat-- > 0) {
-    check_stack_space(st);
     volatile union Ftypes u;
     copy_with_endian(u.buff, st->pointer, 8, st->little);
-    lua_pushnumber(st->L, (lua_Number)u.d);
     check_move_pointer(8);
-    st->ret++;
+    lua_pushnumber(st->L, (lua_Number)u.d);
+    if (st->in_tb == 0) {
+      check_stack_space(st);
+      st->ret++;
+    } else {
+      lua_rawseti(st->L, -2, st->tb_idx++);
+    }
   }
 }
 
@@ -219,8 +235,6 @@ static void read_string(struct State *st, const char **s) {
   uint32_t sz = get_opt_int_size(st, s, 0, 0, 4);
 
   while (st->repeat -- > 0) {
-    check_stack_space(st);
-
     if (sz == 0) {
       size_t slen = strlen(st->pointer);
       lua_pushlstring(st->L, st->pointer, slen);
@@ -230,7 +244,13 @@ static void read_string(struct State *st, const char **s) {
       lua_pushlstring(st->L, st->pointer + sz, slen);
       check_move_pointer(sz + slen);
     }
-    st->ret++;
+
+    if (st->in_tb == 0) {
+      check_stack_space(st);
+      st->ret++;
+    } else {
+      lua_rawseti(st->L, -2, st->tb_idx++);
+    }
   }
 }
 
@@ -239,10 +259,14 @@ static void read_fixed_string(struct State *st, const char **s) {
   if (sz == 0) luaL_error(st->L, "bad n in 'c[n]'");
 
   while (st->repeat-- > 0) {
-    check_stack_space(st);
     lua_pushlstring(st->L, st->pointer, sz);
     check_move_pointer(sz);
-    st->ret++;
+    if (st->in_tb == 0) {
+      check_stack_space(st);
+      st->ret++;
+    } else {
+      lua_rawseti(st->L, -2, st->tb_idx++);
+    }
   }
 }
 
@@ -263,6 +287,22 @@ static void run_instructions(struct State * st) {
       case '<': st->little = 1; goto next_loop;
 
       case '=': st->dont_move = 1; goto next_loop;
+
+      case '{':
+        {
+          if (st->in_tb != 0) luaL_error(st->L, "nested table detected");
+          st->in_tb = st->tb_idx = 1;
+          check_stack_space(st);
+          lua_createtable(st->L, 32, 0);
+          st->ret++;
+          goto next_loop;
+        }
+      case '}':
+        {
+          if (st->in_tb == 0) luaL_error(st->L, "missing corresponding {");
+          st->in_tb = 0;
+          goto next_loop;
+        }
 
       case '$':
       case '&':
@@ -313,6 +353,7 @@ static int buf_read (lua_State *L) {
   struct State st = {
     .repeat = 1, .create_ref = 0, .create_var = 0, .dont_move = 0,
     .ret = 0, .L = L, .little = 1, .stack_space = INIT_STACK_SPACE,
+    .in_tb = 0, .tb_idx = 0,
   };
 
   st.pointer = st.buffer = luaL_checklstring(L, 1, &st.buffer_size);
@@ -329,6 +370,11 @@ static const luaL_Reg buffer_lib[] = {
 };
 
 LUA_API int luaopen_buffer (lua_State *L) {
-  luaL_newlib(L, buffer_lib);
+  if (sizeof(lua_Integer) < 8) {
+    lua_pushstring(L, "incompatible Lua version");
+  } else {
+    luaL_newlib(L, buffer_lib);
+  }
+
   return 1;
 }

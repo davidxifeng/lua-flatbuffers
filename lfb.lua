@@ -15,6 +15,8 @@ string.read   = require 'buffer'.read
 -- = 本次读不移动指针
 -- *[n|%n|()] 下一项操作 重复n次(todo 复合操作) n >= 1
 --
+-- { 括号中的内容保存到table中 }
+--
 -- b[n] bool值 默认1
 -- i/I[n] 有符号整数 默认4
 -- u/U[n] 无符号整数 默认4
@@ -29,22 +31,15 @@ local FlatBuffersMethods = { }
 function FlatBuffersMethods:decode()
   local buf = self[1]
   local schema = self[2]
-
-  local ops = {
-    '<',             -- 设置小端模式
-    '=&u4',          -- root offset
-    '+$1',           -- goto root
-    '=$u4',          -- vt offset
-    '-$2',           -- goto vt
-    '$u2',           -- vt size
-    '&u2',           -- object size
-    '*[($3-4)/2]u2', -- read all field
+  local schema_info = {
+    [1] = 'string',
+    [2] = 'int',
   }
-  local result = table.pack(buf:read(table.concat(ops)))
-  for i = 1, result.n do
-    print(('result %d is: '):format(i), result[i])
-  end
 
+  local root_info = '< =&u4 +$1 =$u4 -$2 $u2 u2 {*[($3 - 4) // 2] u2}'
+  local root_offset, root_size, fields = buf:read(root_info)
+  self.name = buf:read(('< +%d +%d =$u4 +$1 s4'):format(root_offset, fields[1]))
+  self.value = buf:read(('< +%d +%d i4'):format(root_offset, fields[2]))
   return self
 end
 
@@ -60,33 +55,10 @@ function FlatBuffersMethods:dump()
   return ('\n[schema:]\n\n%s\n\n%s\n%s'):format(self_schema, self_buf:xxd(), r)
 end
 
-local function FlatBuffersIndex(self, k)
-  --- dynamic generate with schema
-
-  if k == 'name' then
-    return 'Lua'
-  elseif k == 'value' then
-    return 1
-  else
-    return FlatBuffersMethods[k]
-  end
-end
-
-local FlatBuffers = { __index = FlatBuffersIndex }
+local FlatBuffers = { __index = FlatBuffersMethods }
 
 function FlatBuffers.create(buf, schema)
   return setmetatable({ buf, schema }, FlatBuffers):decode()
 end
 
-local function test()
-  local buf_s = [[
-    0c00 0000 0800 0c00 0400 0800 0800 0000
-    0800 0000 0100 0000 0300 0000 4c75 6100
-  ]]
-  local schema = 'TODO'
-  local fbmsg = FlatBuffers.create(buf_s:from_hex(), schema)
-  print(fbmsg:dump())
-end
-
-test()
 return FlatBuffers
