@@ -14,6 +14,30 @@ table Test {
   f11 : string;
 }
 
+attribute 'test';
+
+table T2 {
+  f1 : string;
+  f2 : int;
+  f3 : T3(required, test);
+  f4 : [T4];
+}
+
+table T3 {
+  f1 : int;
+  f2 : string;
+}
+
+table T4 {
+  f1 : int ;
+  f2 : double;
+}
+
+enum ET : byte {
+  A,
+  B,
+}
+
 root_type Test;
 
 file_extension "lfb";

@@ -66,9 +66,9 @@ function string:xxd()
 end
 
 function string:from_hex()
-  return self:gsub('%X', ''):gsub('(..)', function (bs)
-    return string.char(tonumber('0x' .. bs))
-  end)
+  return (self:gsub('%X', ''):gsub('(..)', function (bs)
+    return string.char(tonumber(bs, 16))
+  end))
 end
 
 return string

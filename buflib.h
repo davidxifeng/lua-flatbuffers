@@ -49,9 +49,3 @@ struct State {
   int          stack_space;   // check_stack
   int          ret;           // 结果数量
 };
-
-static void run_instructions(struct State * st);
-static uint32_t getnum (const char **s, uint32_t df);
-
-static lua_Integer
-unpackint (struct State *st, const char *str, int islittle, int size, int issigned);

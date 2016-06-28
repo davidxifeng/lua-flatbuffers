@@ -22,7 +22,7 @@ all: buffer.so inspect.lua
 buffer.so: buflib.c buflib.h
 	$(CC) $(SHARED_LIB) -o $@ $(CFLAGS) $<
 
-inspect.lua :
+inspect.lua:
 	wget https://raw.githubusercontent.com/kikito/inspect.lua/master/inspect.lua
 
 clean:
