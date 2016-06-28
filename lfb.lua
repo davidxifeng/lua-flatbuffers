@@ -201,7 +201,7 @@ end
 
 local schema_info_cache = setmetatable({}, {__mode = 'kv'})
 
-local function query_schema(schema)
+local function decode_schema_with_cache(schema)
   if type(schema) == 'string' then
     local schema_info = schema_info_cache[schema]
     if not schema_info then
@@ -216,26 +216,16 @@ end
 
 local FlatBuffersMethods = { }
 
---- decode root object from buf
-function FlatBuffersMethods:decode(schema)
-  local buf = self[1]
-  local schema = schema or self[2]
-  return self
-end
-
---- helper function
-function FlatBuffersMethods:dump()
-  local self_buf, self_schema = self[1], self[2]
-  self[1], self[2] = nil, nil
-  local r = inspect(self)
-  self[1], self[2] = self_buf, self_schema
-  return ('\n%s\n%s\n%s'):format(inspect(self_schema), self_buf:xxd(), r)
+function FlatBuffersMethods:decode(buf)
+  return {}
 end
 
 local FlatBuffers = {}
-local FBMsgMt = { __index = FlatBuffersMethods }
-function FlatBuffers.create(buf, schema)
-  return setmetatable({ buf, query_schema(schema) }, FBMsgMt):decode()
+
+local fbs_mt = { __index = FlatBuffersMethods }
+function FlatBuffers.bfbs(schema)
+  assert(type(schema) == 'string')
+  return setmetatable(decode_schema_with_cache(schema), fbs_mt)
 end
 
 return FlatBuffers

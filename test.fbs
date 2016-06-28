@@ -23,6 +23,15 @@ table T2 {
   f4 : [T4];
 }
 
+union T34 { T3, T4 }
+
+struct S1 {
+  s1 : int;
+  s2 : int;
+  s3 : short;
+  s4 : short;
+}
+
 table T3 {
   f1 : int;
   f2 : string;
