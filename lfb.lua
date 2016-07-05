@@ -354,9 +354,7 @@ function decode_table(schema, buf, offset, table_info)
 
     elseif basetype == BaseType.Obj then
 
-      if v == 0 then
-        r[field_info.name] = {}
-      else
+      if v ~= 0 then
         local sub_offset = subtable_offset(buf, offset + v)
         local ti = schema.objects[field_info.type.index + 1] -- 1-based index
         r[field_info.name] = decode_table(schema, buf, sub_offset, ti)
