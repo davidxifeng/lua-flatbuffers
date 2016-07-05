@@ -57,7 +57,20 @@ local field_reader = {
 
   ['float']  = '< +%d f',
   ['double'] = '< +%d d',
+
+  [BaseType.Bool  ] = 'b1',
+  [BaseType.Byte  ] = 'i1',
+  [BaseType.UByte ] = 'u1',
+  [BaseType.Short ] = 'i2',
+  [BaseType.UShort] = 'u2',
+  [BaseType.Int   ] = 'i',
+  [BaseType.UInt  ] = 'u',
+  [BaseType.Long  ] = 'i8',
+  [BaseType.ULong ] = 'u8',
+  [BaseType.Float ] = 'f',
+  [BaseType.Double] = 'd',
 }
+
 
 local function simple_reader(fb_type)
   local reader = assert(field_reader[fb_type])
@@ -264,6 +277,32 @@ local field_type_reader = {
   [BaseType.String] = read_string,
 }
 
+local function decode_array(buf, offset, element_type)
+  local array_info_reader = '< +%d =$u4 +$1 u4 @'
+  --                                 ^      ^  ^
+  --                                 |      |  | array element address
+  --                                 |      |
+  --                                 |      | array size
+  --                                 |
+  --                                 | array offset
+  local size, addr = buf:read(array_info_reader:format(offset))
+
+  -- array的元素类型不能是array,即没有嵌套的数组
+
+  if BaseType.Bool <= element_type and element_type <= BaseType.Double then
+    local rd = field_reader[element_type]
+    return buf:read(('< +%d *%d {%s}'):format(addr, size, rd))
+  elseif element_type == BaseType.String then
+    local r = {}
+    for i = 1, size do
+      r[i] = buf:read(('< +%d =$u4 +$1 s4'):format(addr))
+      addr = addr + 4
+    end
+    return r
+  elseif element_type == BaseType.Obj then
+  end
+end
+
 local function decode_table(schema, buf, offset, table_info)
   print('decoding: ', table_info.name, offset)
 
@@ -272,21 +311,38 @@ local function decode_table(schema, buf, offset, table_info)
   local fields_info = table_info.fields_array
   local r = {}
   for i, v in ipairs(fields) do
+
     local field_info = fields_info[i]
-    if v == 0 then
-      r[field_info.name] = field_info.default_value
-    else
-      local bt = field_info.type.base_type
-      if BaseType.Bool <= bt and bt <= BaseType.String then
-        r[field_info.name] = field_type_reader[bt](buf, offset, v)
-      elseif bt == BaseType.Vector then
-        print(inspect(field_info))
-      elseif bt == BaseType.Obj then
+    local field_type = field_info.type
+    local basetype = field_type.base_type
+
+    if BaseType.Bool <= basetype and basetype <= BaseType.String then
+
+      if v == 0 then
+        r[field_info.name] = field_info.default_value
+      else
+        r[field_info.name] = field_type_reader[basetype](buf, offset, v)
+      end
+
+    elseif basetype == BaseType.Vector then
+
+      if v == 0 then
+        r[field_info.name] = {}
+      else
+        r[field_info.name] = decode_array(buf, offset + v, field_type.element)
+      end
+
+
+    elseif basetype == BaseType.Obj then
+
+      if v == 0 then
+        r[field_info.name] = {}
+      else
         local sub_offset = subtable_offset(buf, offset + v)
-        -- 0-based index -> lua's 1-based index
-        local ti = schema.objects[field_info.type.index + 1]
+        local ti = schema.objects[field_info.type.index + 1] -- 1-based index
         r[field_info.name] = decode_table(schema, buf, sub_offset, ti)
       end
+
     end
   end
 

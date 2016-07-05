@@ -1,10 +1,10 @@
 namespace lfb;
 
 table Test {
-  f1 : bool;
-  f2 : int;
-  f3 : double;
-  f4 : string;
+  f1 : [bool];
+  f2 : [int];
+  f3 : [double];
+  f4 : [string];
   f5 : T2;
 }
 

@@ -1,8 +1,8 @@
 {
-  f1 : true,
-  f2 : 521,
-  f3 : 3.1415926,
-  f4 : 'flat buffers',
+  f1 : [true, false, true, true, false],
+  f2 : [521, 520],
+  f3 : [3.1415926, 1.414],
+  f4 : ['flat buffers', 'lua'],
   f5 : {
     f1 : 't2',
     f2 : 12345,
