@@ -1,5 +1,3 @@
-#!/usr/bin/env lua53
-
 local assert, type = assert, type
 
 local string  = require 'stringx'
@@ -27,8 +25,17 @@ local BaseType = {
     Union  = 16,
 }
 
-local BaseTypeMap = {}
-for k, v in pairs(BaseType) do BaseTypeMap[v] = k end
+local function is_bool_types (tp)
+  return tp == 2
+end
+
+local function is_integral_types (tp)
+  return tp >= 3 and tp <= 10
+end
+
+local function is_float_types (tp)
+  return tp == 11 or tp == 12
+end
 
 local field_reader = {
 
@@ -87,10 +94,10 @@ local function read_table_type(buf, offset)
   local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
   local fields = buf:read(vt_reader:format(offset))
 
-  r.base_type = BaseTypeMap[read_byte(buf, offset, fields[1])]
+  r.base_type = read_byte(buf, offset, fields[1])
   if fields[2] ~= 0 then
-    assert(r.base_type == 'Vector')
-    r.element = BaseTypeMap[read_byte(buf, offset, fields[2])]
+    assert(r.base_type == BaseType.Vector)
+    r.element = read_byte(buf, offset, fields[2])
   end
   r.index = read_int(buf, offset, fields[3], -1)
 
@@ -132,8 +139,15 @@ local function read_table_field(buf, offset)
   r.id = read_ushort(buf, offset, fields[3], 0)
   r.offset = read_ushort(buf, offset, fields[4], 0)
 
-  r.default_integer = read_long(buf, offset, fields[5], 0)
-  r.default_real = read_double(buf, offset, fields[6], 0.0)
+  local bt = r.type.base_type
+  if is_integral_types(bt) then
+    r.default_value = read_long(buf, offset, fields[5], 0)
+  elseif is_bool_types(bt) then
+    r.default_value = read_long(buf, offset, fields[5], 0) ~= 0
+  elseif is_float_types(bt) then
+    r.default_value = read_double(buf, offset, fields[6], 0.0)
+  end
+
   r.deprecated = read_bool(buf, offset, fields[7], false)
   r.required = read_bool(buf, offset, fields[8], false)
   r.key = read_bool(buf, offset, fields[9], false)
@@ -149,6 +163,13 @@ local function parse_object(buf, offset)
   local fields = buf:read(vt_reader:format(offset))
   r.name = read_string(buf, offset, fields[1])
   r.fields = read_table_array(buf, offset, fields[2], read_table_field)
+
+  local fields_array = {}
+  for i, v in ipairs(r.fields) do
+    fields_array[v.id + 1] = v -- id: 0-based lua array index: 1-based
+  end
+  r.fields_array = fields_array
+
   r.is_struct = read_bool(buf, offset, fields[3], false)
   r.minalign = read_int(buf, offset, fields[4], 0)
   r.bytesize = read_int(buf, offset, fields[5], 0)
@@ -187,8 +208,8 @@ end
 
 local function parse_schema(schema_buf)
   local r = {}
-  local schema_reader = '< =&u4 +$1 =$i4 -$2 $u2 u2 {*[($3 - 4) // 2] u2}'
-  local of, root_size, fields = schema_buf:read(schema_reader)
+  local schema_reader = '< =&u4 +$1 =$i4 -$2 $u2 +2 {*[($3 - 4) // 2] u2}'
+  local of, fields = schema_buf:read(schema_reader)
 
   r.objects = read_table_array(schema_buf, of, fields[1], parse_object)
   r.enums = read_table_array(schema_buf, of, fields[2], parse_enum)
@@ -202,22 +223,78 @@ end
 local schema_info_cache = setmetatable({}, {__mode = 'kv'})
 
 local function decode_schema_with_cache(schema)
-  if type(schema) == 'string' then
-    local schema_info = schema_info_cache[schema]
-    if not schema_info then
-      schema_info = parse_schema(schema)
-      schema_info_cache[schema] = schema_info
+  local schema_info = schema_info_cache[schema]
+  if not schema_info then
+    schema_info = parse_schema(schema)
+
+    local dict = {}
+    for _, v in ipairs(schema_info.objects) do
+      dict[v.name] = v
     end
-    return schema_info
-  else
-    return schema
+    schema_info.objects_dict = dict
+
+    dict = {}
+    for _, v in ipairs(schema_info.enums) do
+      dict[v.name] = v
+    end
+    schema_info.enums_dict = dict
+
+
+    schema_info_cache[schema] = schema_info
   end
+  return schema_info
 end
 
 local FlatBuffersMethods = { }
 
+local print_log = print
+
+local field_type_reader = {
+  [BaseType.Bool]   = read_bool,
+  [BaseType.Byte]   = read_byte,
+  [BaseType.UByte]  = read_ubyte,
+  [BaseType.Short]  = read_short,
+  [BaseType.UShort] = read_ushort,
+  [BaseType.Int]    = read_int,
+  [BaseType.UInt]   = read_uint,
+  [BaseType.Long]   = read_long,
+  [BaseType.ULong]  = read_ulong,
+  [BaseType.Float]  = read_float,
+  [BaseType.Double] = read_double,
+  [BaseType.String] = read_string,
+}
+
+local function decode_table(schema, buf, offset, table_info)
+  print('decoding: ', table_info.name, offset)
+
+  local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
+  local fields = buf:read(vt_reader:format(offset))
+  local fields_info = table_info.fields_array
+  local r = {}
+  for i, v in ipairs(fields) do
+    local field_info = fields_info[i]
+    if v == 0 then
+      r[field_info.name] = field_info.default_value
+    else
+      local bt = field_info.type.base_type
+      if BaseType.Bool <= bt and bt <= BaseType.String then
+        r[field_info.name] = field_type_reader[bt](buf, offset, v)
+      elseif bt == BaseType.Vector then
+        print(inspect(field_info))
+      elseif bt == BaseType.Obj then
+        local sub_offset = subtable_offset(buf, offset + v)
+        -- 0-based index -> lua's 1-based index
+        local ti = schema.objects[field_info.type.index + 1]
+        r[field_info.name] = decode_table(schema, buf, sub_offset, ti)
+      end
+    end
+  end
+
+  return r
+end
+
 function FlatBuffersMethods:decode(buf)
-  return {}
+  return decode_table(self, buf, buf:read '< u4', self.root_table)
 end
 
 local FlatBuffers = {}

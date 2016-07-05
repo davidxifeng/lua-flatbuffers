@@ -1,25 +1,17 @@
 namespace lfb;
 
 table Test {
-  f1  : bool;
-  f2  : bool;
-  f3  : short;
-  f4  : ushort;
-  f5  : int;
-  f6  : uint;
-  f7  : float;
-  f8  : long;
-  f9  : ulong;
-  f10 : double;
-  f11 : string;
+  f1 : bool;
+  f2 : int;
+  f3 : double;
+  f4 : string;
+  f5 : T2;
 }
-
-attribute 'test';
 
 table T2 {
   f1 : string;
   f2 : int;
-  f3 : T3(required, test);
+  f3 : T3;
   f4 : [T4];
 }
 
