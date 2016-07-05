@@ -136,8 +136,9 @@ local function read_table_array(buf, offset, field, obj_reader)
   local size, addr = buf:read(('< +%d =$u4 +$1 u4 @'):format(offset + field))
   for i = 1, size do
     local elem_offset = buf:read(('< +%d =$u4 +$1 @'):format(addr))
-    addr = addr + 4
     r[i] = obj_reader(buf, elem_offset)
+
+    addr = addr + 4
   end
   return r
 end
@@ -277,7 +278,9 @@ local field_type_reader = {
   [BaseType.String] = read_string,
 }
 
-local function decode_array(buf, offset, element_type)
+local decode_table, decode_array
+
+function decode_array(schema, field_type, buf, offset)
   local array_info_reader = '< +%d =$u4 +$1 u4 @'
   --                                 ^      ^  ^
   --                                 |      |  | array element address
@@ -289,21 +292,37 @@ local function decode_array(buf, offset, element_type)
 
   -- array的元素类型不能是array,即没有嵌套的数组
 
+  local element_type = field_type.element
   if BaseType.Bool <= element_type and element_type <= BaseType.Double then
+
     local rd = field_reader[element_type]
     return buf:read(('< +%d *%d {%s}'):format(addr, size, rd))
+
   elseif element_type == BaseType.String then
+
     local r = {}
     for i = 1, size do
       r[i] = buf:read(('< +%d =$u4 +$1 s4'):format(addr))
       addr = addr + 4
     end
     return r
+
   elseif element_type == BaseType.Obj then
+
+    local ti = schema.objects[field_type.index + 1] -- 1-based index
+
+    local r = {}
+    for i = 1, size do
+      local elem_offset = buf:read(('< +%d =$u4 +$1 @'):format(addr))
+      r[i] = decode_table(schema, buf, elem_offset, ti)
+      addr = addr + 4
+    end
+    return r
+
   end
 end
 
-local function decode_table(schema, buf, offset, table_info)
+function decode_table(schema, buf, offset, table_info)
   print('decoding: ', table_info.name, offset)
 
   local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
@@ -329,7 +348,7 @@ local function decode_table(schema, buf, offset, table_info)
       if v == 0 then
         r[field_info.name] = {}
       else
-        r[field_info.name] = decode_array(buf, offset + v, field_type.element)
+        r[field_info.name] = decode_array(schema, field_type, buf, offset + v)
       end
 
 
