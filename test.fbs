@@ -8,14 +8,15 @@ table Test {
   f5 : T2;
 }
 
+union T34 { T3, T4 }
+
 table T2 {
   f1 : string;
   f2 : int;
-  f3 : T3;
-  f4 : [T4];
+  f3 : [T4];
+  f4 : T34;
+  f5 : T34;
 }
-
-union T34 { T3, T4 }
 
 struct S1 {
   s1 : int;

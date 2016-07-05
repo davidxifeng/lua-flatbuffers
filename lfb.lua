@@ -319,6 +319,9 @@ function decode_array(schema, field_type, buf, offset)
     end
     return r
 
+  elseif element_type == BaseType.Union then
+
+    print('array of union')
   end
 end
 
@@ -356,9 +359,14 @@ function decode_table(schema, buf, offset, table_info)
 
       if v ~= 0 then
         local sub_offset = subtable_offset(buf, offset + v)
-        local ti = schema.objects[field_info.type.index + 1] -- 1-based index
+        local ti = schema.objects[field_type.index + 1] -- 1-based index
         r[field_info.name] = decode_table(schema, buf, sub_offset, ti)
       end
+
+    elseif basetype == BaseType.Union then
+
+      local ui = schema.enums[field_type.index + 1] -- 1-based index
+      print(i, v, 'union field: ', inspect(field_type), '\n', inspect(ui))
 
     end
   end
