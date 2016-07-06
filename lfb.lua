@@ -59,20 +59,6 @@ local field_reader = {
   [BaseType.Double] = 'd',
 }
 
-local field_size = {
-  [BaseType.Bool  ] = 1 ,
-  [BaseType.Byte  ] = 1 ,
-  [BaseType.UByte ] = 1 ,
-  [BaseType.Short ] = 2 ,
-  [BaseType.UShort] = 2 ,
-  [BaseType.Int   ] = 4 ,
-  [BaseType.UInt  ] = 4 ,
-  [BaseType.Long  ] = 8 ,
-  [BaseType.ULong ] = 8 ,
-  [BaseType.Float ] = 4 ,
-  [BaseType.Double] = 8 ,
-}
-
 local function simple_reader(fb_type)
   return function (buf, offset, field, dv)
     if field ~= 0 then
@@ -302,8 +288,8 @@ local function decode_struct(buf, offset, table_info)
     local field_type = field_info.type
     local basetype = field_type.base_type
     local rd = field_reader[basetype]
-    r[field_info.name] = buf:read(('< +%d %s'):format(offset, rd))
-    offset = offset + field_size[basetype]
+    local addr = offset + field_info.offset
+    r[field_info.name] = buf:read(('< +%d %s'):format(addr, rd))
   end
 
   return r
@@ -413,6 +399,8 @@ function decode_table(schema, buf, offset, table_info, fcb)
 
       i = i + 1 -- skip next field: basetype Union
 
+      -- union only contain table
+
       if v ~= 0 then
         local union_index = buf:read(('< +%d u1'):format(offset + v))
         local next_field_info = fields_info[i]
@@ -420,11 +408,11 @@ function decode_table(schema, buf, offset, table_info, fcb)
         local next_v = fields[i]
         assert(next_field_type.base_type == BaseType.Union and next_v ~= 0)
 
-        local sub_offset = subtable_offset(buf, offset + next_v)
-
         -- 1-based index
         local enum_info = schema.enums[next_field_type.index + 1]
         local ti = enum_info.values_lookup_dict[union_index].object
+
+        local sub_offset = subtable_offset(buf, offset + next_v)
 
         r[field_info.name] = ti.name
         r[next_field_info.name] = decode_table(schema, buf, sub_offset, ti, fcb)

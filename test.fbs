@@ -5,6 +5,14 @@ struct Vector {
   y : int;
 }
 
+struct CS {
+  bl : bool;
+  db : double;
+  by : byte;
+  ub : ubyte;
+  in : int;
+}
+
 enum ET : ubyte {
   A,
   B,
@@ -19,6 +27,7 @@ table Test {
   f6 : [ET];
   f7 : Vector;
   f8 : [Vector];
+  f9 : CS;
 }
 
 union T34 { T3, T4 }
