@@ -227,6 +227,7 @@ local function parse_enum(buf, offset)
   return r
 end
 
+-- TODO replace with `decode_table`
 local function parse_schema(schema_buf)
   local r = {}
   local schema_reader = '< =&u4 +$1 =$i4 -$2 $u2 +2 {*[($3 - 4) // 2] u2}'
@@ -270,8 +271,6 @@ end
 
 local FlatBuffersMethods = { }
 
-local print_log = print
-
 local field_type_reader = {
   [BaseType.Bool]   = read_bool,
   [BaseType.Byte]   = read_byte,
@@ -289,6 +288,8 @@ local field_type_reader = {
 
 local decode_table, decode_array
 
+-- types may in array: bool-string, table
+-- types may NOT in array: vector, union
 function decode_array(schema, field_type, buf, offset)
   local array_info_reader = '< +%d =$u4 +$1 u4 @'
   --                                 ^      ^  ^
@@ -317,9 +318,7 @@ function decode_array(schema, field_type, buf, offset)
     return r
 
   elseif element_type == BaseType.Obj then
-
     local ti = schema.objects[field_type.index + 1] -- 1-based index
-
     local r = {}
     for i = 1, size do
       local elem_offset = buf:read(('< +%d =$u4 +$1 @'):format(addr))
@@ -327,16 +326,10 @@ function decode_array(schema, field_type, buf, offset)
       addr = addr + 4
     end
     return r
-
-  elseif element_type == BaseType.Union then
-
-    print('array of union')
   end
 end
 
 function decode_table(schema, buf, offset, table_info)
-  print('decoding: ', table_info.name, offset)
-
   local fields_info = table_info.fields_array
 
   local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
@@ -344,8 +337,9 @@ function decode_table(schema, buf, offset, table_info)
 
   local r = {}
 
-  local i = 0
-  while i < #fields do
+  local i, fields_len = 0, # fields
+
+  while i < fields_len do
     i = i + 1
     local v = fields[i]
 
@@ -378,7 +372,7 @@ function decode_table(schema, buf, offset, table_info)
 
     elseif basetype == BaseType.UType then
 
-      i = i + 1
+      i = i + 1 -- skip next field: basetype Union
 
       if v ~= 0 then
         local union_index = buf:read(('< +%d u1'):format(offset + v))
