@@ -129,9 +129,9 @@ local function parse_key_value(buf, offset)
 end
 
 local function read_table_array(buf, offset, field, obj_reader)
-  local r = {}
+  if field == 0 then return nil end
 
-  if field == 0 then return r end
+  local r = {}
 
   local size, addr = buf:read(('< +%d =$u4 +$1 u4 @'):format(offset + field))
   for i = 1, size do
@@ -213,7 +213,14 @@ local function parse_enum(buf, offset)
 
   r.name = read_string(buf, offset, fields[1])
   r.values = read_table_array(buf, offset, fields[2], parse_enum_val)
+
+  local t = {}
+  for i, v in ipairs(r.values) do t[v.value] = v end
+  r.values_lookup_dict = t
+
   r.is_union = read_bool(buf, offset, fields[3], false)
+
+  -- required
   r.underlying_type = read_table_type(buf, subtable_offset(buf, offset + fields[4]))
   r.attributes = read_table_array(buf, offset, fields[5], parse_key_value)
 
@@ -229,7 +236,9 @@ local function parse_schema(schema_buf)
   r.enums = read_table_array(schema_buf, of, fields[2], parse_enum)
   r.file_ident = read_string(schema_buf, of, fields[3])
   r.file_ext = read_string(schema_buf, of, fields[4])
-  r.root_table = parse_object(schema_buf, subtable_offset(schema_buf, of + fields[5]))
+  if fields[5] ~= 0 then
+    r.root_table = parse_object(schema_buf, subtable_offset(schema_buf, of + fields[5]))
+  end
 
   return r
 end
@@ -328,11 +337,17 @@ end
 function decode_table(schema, buf, offset, table_info)
   print('decoding: ', table_info.name, offset)
 
+  local fields_info = table_info.fields_array
+
   local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
   local fields = buf:read(vt_reader:format(offset))
-  local fields_info = table_info.fields_array
+
   local r = {}
-  for i, v in ipairs(fields) do
+
+  local i = 0
+  while i < #fields do
+    i = i + 1
+    local v = fields[i]
 
     local field_info = fields_info[i]
     local field_type = field_info.type
@@ -340,17 +355,15 @@ function decode_table(schema, buf, offset, table_info)
 
     if BaseType.Bool <= basetype and basetype <= BaseType.String then
 
-      if v == 0 then
-        r[field_info.name] = field_info.default_value
-      else
+      if v ~= 0 then
         r[field_info.name] = field_type_reader[basetype](buf, offset, v)
+      else
+        r[field_info.name] = field_info.default_value
       end
 
     elseif basetype == BaseType.Vector then
 
-      if v == 0 then
-        r[field_info.name] = {}
-      else
+      if v ~= 0 then
         r[field_info.name] = decode_array(schema, field_type, buf, offset + v)
       end
 
@@ -363,11 +376,26 @@ function decode_table(schema, buf, offset, table_info)
         r[field_info.name] = decode_table(schema, buf, sub_offset, ti)
       end
 
-    elseif basetype == BaseType.Union then
+    elseif basetype == BaseType.UType then
 
-      local ui = schema.enums[field_type.index + 1] -- 1-based index
-      print(i, v, 'union field: ', inspect(field_type), '\n', inspect(ui))
+      i = i + 1
 
+      if v ~= 0 then
+        local union_index = buf:read(('< +%d u1'):format(offset + v))
+        local next_field_info = fields_info[i]
+        local next_field_type = next_field_info.type
+        local next_v = fields[i]
+        assert(next_field_type.base_type == BaseType.Union and next_v ~= 0)
+
+        local sub_offset = subtable_offset(buf, offset + next_v)
+
+        -- 1-based index
+        local enum_info = schema.enums[next_field_type.index + 1]
+        local ti = enum_info.values_lookup_dict[union_index].object
+
+        r[field_info.name] = ti.name
+        r[next_field_info.name] = decode_table(schema, buf, sub_offset, ti)
+      end
     end
   end
 
