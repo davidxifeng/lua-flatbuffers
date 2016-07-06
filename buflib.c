@@ -405,6 +405,7 @@ static const luaL_Reg buffer_lib[] = {
 };
 
 LUA_API int luaopen_buffer (lua_State *L) {
+  luaL_checkversion(L);
   if (sizeof(lua_Integer) < 8) {
     lua_pushstring(L, "incompatible Lua version");
   } else {
