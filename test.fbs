@@ -1,11 +1,17 @@
 namespace lfb;
 
+enum ET : ubyte {
+  A,
+  B,
+}
+
 table Test {
   f1 : [bool];
   f2 : [int];
   f3 : [double];
   f4 : [string];
   f5 : T2;
+  f6 : [ET];
 }
 
 union T34 { T3, T4 }
@@ -33,11 +39,6 @@ table T3 {
 table T4 {
   f1 : int ;
   f2 : double;
-}
-
-enum ET : byte {
-  A,
-  B,
 }
 
 root_type Test;

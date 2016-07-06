@@ -277,7 +277,7 @@ local decode_table, decode_array
 
 -- types may in array: bool-string, table
 -- types may NOT in array: vector, union
-function decode_array(schema, field_type, buf, offset)
+function decode_array(schema, field_type, buf, offset, fcb)
   local array_info_reader = '< +%d =$u4 +$1 u4 @'
   --                                 ^      ^  ^
   --                                 |      |  | array element address
@@ -309,14 +309,14 @@ function decode_array(schema, field_type, buf, offset)
     local r = {}
     for i = 1, size do
       local elem_offset = buf:read(('< +%d =$u4 +$1 @'):format(addr))
-      r[i] = decode_table(schema, buf, elem_offset, ti)
+      r[i] = decode_table(schema, buf, elem_offset, ti, fcb)
       addr = addr + 4
     end
     return r
   end
 end
 
-function decode_table(schema, buf, offset, table_info)
+function decode_table(schema, buf, offset, table_info, fcb)
   local fields_info = table_info.fields_array
 
   local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
@@ -334,6 +334,8 @@ function decode_table(schema, buf, offset, table_info)
     local field_type = field_info.type
     local basetype = field_type.base_type
 
+    if fcb and fcb(r, v, field_info) then goto continue end
+
     if BaseType.Bool <= basetype and basetype <= BaseType.String then
 
       if v ~= 0 then
@@ -345,7 +347,7 @@ function decode_table(schema, buf, offset, table_info)
     elseif basetype == BaseType.Vector then
 
       if v ~= 0 then
-        r[field_info.name] = decode_array(schema, field_type, buf, offset + v)
+        r[field_info.name] = decode_array(schema, field_type, buf, offset + v, fcb)
       end
 
 
@@ -354,7 +356,7 @@ function decode_table(schema, buf, offset, table_info)
       if v ~= 0 then
         local sub_offset = subtable_offset(buf, offset + v)
         local ti = schema.objects[field_type.index + 1] -- 1-based index
-        r[field_info.name] = decode_table(schema, buf, sub_offset, ti)
+        r[field_info.name] = decode_table(schema, buf, sub_offset, ti, fcb)
       end
 
     elseif basetype == BaseType.UType then
@@ -375,9 +377,12 @@ function decode_table(schema, buf, offset, table_info)
         local ti = enum_info.values_lookup_dict[union_index].object
 
         r[field_info.name] = ti.name
-        r[next_field_info.name] = decode_table(schema, buf, sub_offset, ti)
+        r[next_field_info.name] = decode_table(schema, buf, sub_offset, ti, fcb)
       end
     end
+
+    ::continue::
+
   end
 
   return r
@@ -385,6 +390,10 @@ end
 
 function FlatBuffersMethods:decode(buf)
   return decode_table(self, buf, buf:read '< u4', self.root_table)
+end
+
+function FlatBuffersMethods:decode_ex(buf, fcb)
+  return decode_table(self, buf, buf:read '< u4', self.root_table, fcb)
 end
 
 local FlatBuffers = {}
