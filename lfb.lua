@@ -25,18 +25,6 @@ local BaseType = {
     Union  = 16,
 }
 
-local function is_bool_types (tp)
-  return tp == 2
-end
-
-local function is_integral_types (tp)
-  return tp >= 3 and tp <= 10
-end
-
-local function is_float_types (tp)
-  return tp == 11 or tp == 12
-end
-
 local field_reader = {
 
   ['string'] = '< +%d =$u4 +$1 s4',
@@ -73,12 +61,11 @@ local field_reader = {
 
 
 local function simple_reader(fb_type)
-  local reader = assert(field_reader[fb_type])
   return function (buf, offset, field, dv)
-    if field == 0 then
-      return dv
+    if field ~= 0 then
+      return buf:read(field_reader[fb_type]:format(offset + field))
     else
-      return buf:read(reader:format(offset + field))
+      return dv
     end
   end
 end
@@ -154,11 +141,11 @@ local function read_table_field(buf, offset)
   r.offset = read_ushort(buf, offset, fields[4], 0)
 
   local bt = r.type.base_type
-  if is_integral_types(bt) then
+  if BaseType.Byte <= bt and bt <= BaseType.ULong then
     r.default_value = read_long(buf, offset, fields[5], 0)
-  elseif is_bool_types(bt) then
+  elseif bt == BaseType.Bool then
     r.default_value = read_long(buf, offset, fields[5], 0) ~= 0
-  elseif is_float_types(bt) then
+  elseif bt == BaseType.Float or bt == BaseType.Double then
     r.default_value = read_double(buf, offset, fields[6], 0.0)
   end
 
