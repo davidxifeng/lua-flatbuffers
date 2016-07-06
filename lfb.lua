@@ -390,6 +390,8 @@ end
 local FlatBuffers = {}
 
 local fbs_mt = { __index = FlatBuffersMethods }
+
+-- TODO create schema with json, or parse from fbs source file with lpeg
 function FlatBuffers.bfbs(schema)
   assert(type(schema) == 'string')
   return setmetatable(decode_schema_with_cache(schema), fbs_mt)
