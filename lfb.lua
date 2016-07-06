@@ -59,6 +59,19 @@ local field_reader = {
   [BaseType.Double] = 'd',
 }
 
+local field_size = {
+  [BaseType.Bool  ] = 1 ,
+  [BaseType.Byte  ] = 1 ,
+  [BaseType.UByte ] = 1 ,
+  [BaseType.Short ] = 2 ,
+  [BaseType.UShort] = 2 ,
+  [BaseType.Int   ] = 4 ,
+  [BaseType.UInt  ] = 4 ,
+  [BaseType.Long  ] = 8 ,
+  [BaseType.ULong ] = 8 ,
+  [BaseType.Float ] = 4 ,
+  [BaseType.Double] = 8 ,
+}
 
 local function simple_reader(fb_type)
   return function (buf, offset, field, dv)
@@ -84,7 +97,7 @@ local read_double = simple_reader 'double'
 local read_string = simple_reader 'string'
 
 local function subtable_offset(buf, offset)
-  return buf:read(('< +%d =$i4 +$1 @'):format(offset))
+  return buf:read(('< +%d =$u4 +$1 @'):format(offset)) -- TODO confirm u4 or i4
 end
 
 
@@ -221,6 +234,11 @@ local function parse_schema(schema_buf)
   local of, fields = schema_buf:read(schema_reader)
 
   r.objects = read_table_array(schema_buf, of, fields[1], parse_object)
+
+  local t = {}
+  for _, v in ipairs(r.objects) do t[v.name] = v end
+  r.objects_name_dict = t
+
   r.enums = read_table_array(schema_buf, of, fields[2], parse_enum)
   r.file_ident = read_string(schema_buf, of, fields[3])
   r.file_ext = read_string(schema_buf, of, fields[4])
@@ -275,7 +293,23 @@ local field_type_reader = {
 
 local decode_table, decode_array
 
--- types may in array: bool-string, table
+local function decode_struct(buf, offset, table_info)
+  local init_offset = offset
+
+  local r = {}
+
+  for _, field_info in ipairs(table_info.fields) do
+    local field_type = field_info.type
+    local basetype = field_type.base_type
+    local rd = field_reader[basetype]
+    r[field_info.name] = buf:read(('< +%d %s'):format(offset, rd))
+    offset = offset + field_size[basetype]
+  end
+
+  return r
+end
+
+-- types may in array: bool-string, table(struct)
 -- types may NOT in array: vector, union
 function decode_array(schema, field_type, buf, offset, fcb)
   local array_info_reader = '< +%d =$u4 +$1 u4 @'
@@ -293,7 +327,7 @@ function decode_array(schema, field_type, buf, offset, fcb)
   if BaseType.Bool <= element_type and element_type <= BaseType.Double then
 
     local rd = field_reader[element_type]
-    return buf:read(('< +%d *%d {%s}'):format(addr, size, rd))
+    return buf:read(('< +%d {*%d %s }'):format(addr, size, rd))
 
   elseif element_type == BaseType.String then
 
@@ -307,17 +341,29 @@ function decode_array(schema, field_type, buf, offset, fcb)
   elseif element_type == BaseType.Obj then
     local ti = schema.objects[field_type.index + 1] -- 1-based index
     local r = {}
-    for i = 1, size do
-      local elem_offset = buf:read(('< +%d =$u4 +$1 @'):format(addr))
-      r[i] = decode_table(schema, buf, elem_offset, ti, fcb)
-      addr = addr + 4
+
+    if ti.is_struct then
+      for i = 1, size do
+        r[i] = decode_struct(buf, addr, ti)
+        addr = addr + ti.bytesize
+      end
+    else
+      for i = 1, size do
+        local elem_offset = buf:read(('< +%d =$u4 +$1 @'):format(addr))
+        r[i] = decode_table(schema, buf, elem_offset, ti, fcb)
+        addr = addr + 4
+      end
     end
+
+
     return r
   end
 end
 
 function decode_table(schema, buf, offset, table_info, fcb)
   local fields_info = table_info.fields_array
+
+  if table_info.is_struct then return decode_struct(buf, offset, table_info) end
 
   local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
   local fields = buf:read(vt_reader:format(offset))
@@ -356,7 +402,11 @@ function decode_table(schema, buf, offset, table_info, fcb)
       if v ~= 0 then
         local sub_offset = subtable_offset(buf, offset + v)
         local ti = schema.objects[field_type.index + 1] -- 1-based index
-        r[field_info.name] = decode_table(schema, buf, sub_offset, ti, fcb)
+        if ti.is_struct then
+          r[field_info.name] = decode_struct(buf, offset + v, ti)
+        else
+          r[field_info.name] = decode_table(schema, buf, sub_offset, ti, fcb)
+        end
       end
 
     elseif basetype == BaseType.UType then
@@ -387,8 +437,14 @@ function decode_table(schema, buf, offset, table_info, fcb)
   return r
 end
 
-function FlatBuffersMethods:decode(buf)
-  return decode_table(self, buf, buf:read '< u4', self.root_table)
+function FlatBuffersMethods:decode(buf, offset, ti)
+  offset = offset or buf:read '< u4'
+  if ti then
+    ti = assert(self.objects_name_dict[ti], 'bad type name')
+  else
+    ti = self.root_table
+  end
+  return decode_table(self, buf, offset, ti)
 end
 
 function FlatBuffersMethods:decode_ex(buf, fcb)

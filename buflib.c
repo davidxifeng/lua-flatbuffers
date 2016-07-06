@@ -326,7 +326,8 @@ static void run_instructions(struct State * st) {
         {
           if (st->repeat > 1) luaL_error(st->L, "duplicate repeat flag");
           int64_t r = get_argument(st, &pc, 0);
-          if (r <= 0 || r > 1024) luaL_error(st->L, "bad repeat times in '*n'");
+          if (r <= 0 ) luaL_error(st->L, "bad repeat times: [%I]", r);
+          if (st->in_tb == 0 && r > 1024) luaL_error(st->L, "too many result on stack: [%I]", r);
           st->repeat = (uint32_t)r;
           goto next_loop;
         }

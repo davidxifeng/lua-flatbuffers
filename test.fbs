@@ -1,5 +1,10 @@
 namespace lfb;
 
+struct Vector {
+  x : int;
+  y : int;
+}
+
 enum ET : ubyte {
   A,
   B,
@@ -12,6 +17,8 @@ table Test {
   f4 : [string];
   f5 : T2;
   f6 : [ET];
+  f7 : Vector;
+  f8 : [Vector];
 }
 
 union T34 { T3, T4 }
