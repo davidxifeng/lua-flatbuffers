@@ -139,13 +139,15 @@ local function read_table_field(buf, offset)
   r.id = read_ushort(buf, offset, fields[3], 0)
   r.offset = read_ushort(buf, offset, fields[4], 0)
 
-  local bt = r.type.base_type
-  if BaseType.Byte <= bt and bt <= BaseType.ULong then
-    r.default_value = read_long(buf, offset, fields[5], 0)
-  elseif bt == BaseType.Bool then
-    r.default_value = read_long(buf, offset, fields[5], 0) ~= 0
-  elseif bt == BaseType.Float or bt == BaseType.Double then
-    r.default_value = read_double(buf, offset, fields[6], 0.0)
+  if fields[5] ~= 0 or fields[6] ~= 0 then
+    local bt = r.type.base_type
+    if BaseType.Byte <= bt and bt <= BaseType.ULong then
+      r.default_value = read_long(buf, offset, fields[5], 0)
+    elseif bt == BaseType.Bool then
+      r.default_value = read_long(buf, offset, fields[5], 0) ~= 0
+    elseif bt == BaseType.Float or bt == BaseType.Double then
+      r.default_value = read_double(buf, offset, fields[6], 0.0)
+    end
   end
 
   r.deprecated = read_bool(buf, offset, fields[7], false)
