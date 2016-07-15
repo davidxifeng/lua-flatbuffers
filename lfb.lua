@@ -368,7 +368,7 @@ function decode_table(schema, buf, offset, table_info, fcb)
     local field_type = field_info.type
     local basetype = field_type.base_type
 
-    if fcb and fcb(r, offset, v, field_info) then goto continue end
+    if fcb and fcb(table_info, r, offset, field_info, v) then goto continue end
 
     if BaseType.Bool <= basetype and basetype <= BaseType.String then
 
