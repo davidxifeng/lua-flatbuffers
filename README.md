@@ -13,19 +13,19 @@ todo list
 
 # 用法简介
 
-## 编译C模块
+## 1.编译C模块
 
 ```zsh
 LUAPATH=/Lua5.3头文件路径 make buffer.so`
 ```
 
-## 使用flatc编译schema为bfbs
+## 2.使用flatc编译schema为bfbs
 
 ```zsh
 flatc --binary --schema test.fb
 ```
 
-## 在Lua中解析flatbuffer
+## 3.在Lua中解析flatbuffer
 
 ```lua
 local FlatBuffers = require 'lfb'
