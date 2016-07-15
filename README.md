@@ -13,19 +13,34 @@ todo list
 
 # 用法简介
 
-1. 编译C模块:`LUAPATH=/Lua5.3头文件路径 make buffer.so`
-2. 使用flatc编译schema为bfbs, `flatc --binary --schema test.fb`
+1. 编译C模块:
+
+```zsh
+LUAPATH=/Lua5.3头文件路径 make buffer.so`
+```
+
+2. 使用flatc编译schema为bfbs
+
+```zsh
+flatc --binary --schema test.fb
+```
+
 3. 在Lua中解析flatbuffer
 
 ```lua
 local FlatBuffers = require 'lfb'
 
+-- create a Lua Schema object to decode flatbuffer string
 local fbs = FlatBuffers.bfbs(io.open('test.bfbs', 'rb'):read 'a')
 
-local fbmsg = fbs:decode(io.open('test.fb', 'rb'):read 'a')
+-- read a test message buffer
+local buf = io.open('test.fb', 'rb'):read 'a'
 
+-- decode a flatbuffer string to a Lua table
+local fbmsg = fbs:decode(buf)
+
+-- print the decoded message
 local inspect = require 'inspect'
-
 print(inspect(fbmsg))
 
 
