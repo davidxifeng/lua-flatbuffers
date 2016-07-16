@@ -9,6 +9,7 @@ todo list
 * parse schema, do not depend flatc to compile schema to bfbs/json
 * add support for Lua 5.1/5.2 and luajit
 * add documentation & tests & examples
+* safe buffer read library
 
 
 # 用法简介
@@ -55,6 +56,8 @@ print(inspect(fbmsg))
 开发计划：
 
 * 写FlatBuffers
+* buffer:read函数对指针读范围进行安全检查
+* 不使用string元表
 * 直接解析schema文件, 不再依赖flatc编译schema到bfbs或json
 * 支持Lua 5.1/5.2和luajit
 * 添加文档和测试
