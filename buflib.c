@@ -1,4 +1,4 @@
-#include "buflib.h"
+#include "buflib.inl"
 
 #define MAX_SIZET ((size_t)(~(size_t)0))
 #define MAXSIZE   (sizeof(size_t) < sizeof(int) ? MAX_SIZET : (size_t)(INT_MAX))
@@ -363,28 +363,6 @@ next_loop:
   }
 }
 
-// > 大端, < 小端
-//
-// $n 创建中间变量，通过 $n 来使用用，不作为结果返回
-// &n 引用，此值后续可以通过 $n 来引用,同时也作为结果返回
-// $n 访问变量
-// +[n|%n|()] 当前指针向前移动n个字节
-// -[n|%n|()] 当前指针向后移动n个字节
-//
-// = 本次读不移动指针
-// *[n|$n|()] 下一项操作 重复n次(todo 复合操作) n >= 1
-//
-// { 括号中的内容保存到table中 }
-//
-// [@ or ^] 返回当前位置相当于buffer首地址的偏移
-// b[n] bool值 默认1
-// i/I[n] 有符号整数 默认4
-// u/U[n] 无符号整数 默认4
-// f float 32
-// d float 64, double
-// s[n] 字符串 没有选项n时是零结尾字符串，存在n时，固定长度字符串, n: [1 - 4]
-// c[n] 指定长度的字符串 n [1 - 2^32]
-
 static int buf_read (lua_State *L) {
   struct State st = {
     .repeat = 1, .create_ref = 0, .create_var = 0, .dont_move = 0,
@@ -392,7 +370,13 @@ static int buf_read (lua_State *L) {
     .in_tb = 0, .tb_idx = 0,
   };
 
-  st.pointer = st.buffer = luaL_checklstring(L, 1, &st.buffer_size);
+  if (lua_type(L, 1) == LUA_TNUMBER) {
+    st.pointer = st.buffer = (void *)(luaL_checkinteger(L, 1));
+  }
+  else {
+    st.pointer = st.buffer = luaL_checklstring(L, 1, &st.buffer_size);
+  }
+
   st.instructions = luaL_checkstring(L, 2);
 
   luaL_checkstack(L, INIT_STACK_SPACE, NULL);

@@ -19,7 +19,7 @@ endif
 all: buffer.so inspect.lua
 	@./test.lua
 
-buffer.so: buflib.c buflib.h
+buffer.so: buflib.c buflib.inl
 	$(CC) $(SHARED_LIB) -o $@ $(CFLAGS) $<
 
 inspect.lua:
