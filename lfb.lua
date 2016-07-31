@@ -262,8 +262,6 @@ local function decode_schema_with_cache(schema)
   return schema_info
 end
 
-local FlatBuffersMethods = { }
-
 local field_type_reader = {
   [BaseType.Bool]   = read_bool,
   [BaseType.Byte]   = read_byte,
@@ -426,6 +424,8 @@ function decode_table(schema, buf, offset, table_info, fcb)
 
   return r
 end
+
+local FlatBuffersMethods = { }
 
 function FlatBuffersMethods:decode(buf, offset, ti)
   offset = offset or buf:read '< u4'
