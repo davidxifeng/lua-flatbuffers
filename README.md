@@ -2,48 +2,21 @@
 
 Lua library for [FlatBuffers][flatbuffers]
 
+## Status
 
-todo list
-
-* write flatbuffers
-* parse schema, do not depend flatc to compile schema to bfbs/json
-* add support for Lua 5.1/5.2 and luajit
-* add documentation & tests & examples
-* safe buffer read library
+Reading from **trusted** FlatBuffers is pretty stable now, but be careful
+that bad input buffer could **crash** your process, I didn't check the
+buffer border now.
 
 
-# 用法简介
+# Usage
 
-## 1.编译C模块
-
-```zsh
-LUAPATH=/Lua5.3头文件路径 make buffer.so`
-```
-
-## 2.使用flatc编译schema为bfbs
-
-```zsh
-flatc --binary --schema test.fb
-```
-
-## 3.在Lua中解析flatbuffer
 
 ```lua
-local FlatBuffers = require 'lfb'
 
--- create a Lua Schema object to decode flatbuffer string
-local fbs = FlatBuffers.bfbs(io.open('test.bfbs', 'rb'):read 'a')
+FlatBuffersSchema = FlatBuffers.bfbs('flatc --binary --schema test.fb')
 
--- read a test message buffer
-local buf = io.open('test.fb', 'rb'):read 'a'
-
--- decode a flatbuffer string to a Lua table
-local fbmsg = fbs:decode(buf)
-
--- print the decoded message
-local inspect = require 'inspect'
-print(inspect(fbmsg))
-
+your_message_as_a_lua_table = FlatBuffersSchema:decode('a buffer encode a message in FlatBuffers format')
 
 ```
 
@@ -61,6 +34,14 @@ print(inspect(fbmsg))
 * 直接解析schema文件, 不再依赖flatc编译schema到bfbs或json
 * 支持Lua 5.1/5.2和luajit
 * 添加文档和测试
+
+## TODO
+
+* write flatbuffers
+* parse schema, do not depend flatc to compile schema to bfbs/json
+* add support for Lua 5.1/5.2 and luajit
+* add documentation & tests & examples
+* safe buffer read library
 
 
 [flatbuffers]: https://github.com/google/flatbuffers
