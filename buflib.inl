@@ -22,8 +22,7 @@
   64位无符号类型暂时不做特殊处理
 
   non-scalar types:
-
-  vector: 不支持嵌套数组,可以用table包装一层数组
+  vector:
   string: utf-8 7-bit ascii, 其他类型的字符串应该用[ubyte] [uint]表示
   reference to enum, struct, union
 */
@@ -46,8 +45,8 @@
 
  [@ or ^] 返回当前位置相当于buffer首地址的偏移
  b[n] bool值 默认1
- i/I[n] 有符号整数 默认4
- u/U[n] 无符号整数 默认4
+ i[n] 有符号整数 默认4
+ u[n] 无符号整数 默认4
  f float 32
  d float 64, double
  s[n] 字符串 没有选项n时是零结尾字符串，存在n时，固定长度字符串, n: [1 - 4]

@@ -282,11 +282,11 @@ static void run_instructions(struct State * st) {
   while ((c = *pc++)) {
 
     switch((c)) {
-      case ' ': case '\t': case '\r': case '\n': goto next_loop;
-      case '>': st->little = 0; goto next_loop;
-      case '<': st->little = 1; goto next_loop;
+      case ' ': case '\t': case '\r': case '\n': continue;
+      case '>': st->little = 0; continue;
+      case '<': st->little = 1; continue;
 
-      case '=': st->dont_move = 1; goto next_loop;
+      case '=': st->dont_move = 1; continue;
 
       case '{':
         {
@@ -295,13 +295,13 @@ static void run_instructions(struct State * st) {
           st->ret++;
           check_stack_space(st);
           lua_createtable(st->L, 32, 0);
-          goto next_loop;
+          continue;
         }
       case '}':
         {
           if (st->in_tb == 0) luaL_error(st->L, "missing corresponding {");
           st->in_tb = 0;
-          goto next_loop;
+          continue;
         }
 
       case '$':
@@ -317,11 +317,11 @@ static void run_instructions(struct State * st) {
             st->variable = ns;
           }
           if (c == '$') st->create_var = 1; else st->create_ref = 1;
-          goto next_loop;
+          continue;
         }
 
-      case '+': st->pointer += get_argument(st, &pc, 1); goto next_loop;
-      case '-': st->pointer -= get_argument(st, &pc, 1); goto next_loop;
+      case '+': st->pointer += get_argument(st, &pc, 1); continue;
+      case '-': st->pointer -= get_argument(st, &pc, 1); continue;
       case '*':
         {
           if (st->repeat > 1) luaL_error(st->L, "duplicate repeat flag");
@@ -329,7 +329,7 @@ static void run_instructions(struct State * st) {
           if (r <= 0 ) luaL_error(st->L, "bad repeat times: [%I]", r);
           if (st->in_tb == 0 && r > 1024) luaL_error(st->L, "too many result on stack: [%I]", r);
           st->repeat = (uint32_t)r;
-          goto next_loop;
+          continue;
         }
 
       case '@':
@@ -342,24 +342,20 @@ static void run_instructions(struct State * st) {
           } else {
             lua_rawseti(st->L, -2, st->tb_idx++);
           }
-          goto next_loop;
+          continue;
         }
 
-      case 'b': read_boolean(st, &pc); goto reset_repeat;
-      case 'i': case 'u': read_integer(st, &pc, c == 'i'); goto reset_repeat;
-      case 'f': read_float32(st); goto reset_repeat;
-      case 'd': read_float64(st); goto reset_repeat;
-      case 's': read_string(st, &pc); goto reset_repeat;
-      case 'c': read_fixed_string(st, &pc); goto reset_repeat;
+      case 'b': read_boolean(st, &pc); break;
+      case 'i': case 'u': read_integer(st, &pc, c == 'i'); break;
+      case 'f': read_float32(st); break;
+      case 'd': read_float64(st); break;
+      case 's': read_string(st, &pc); break;
+      case 'c': read_fixed_string(st, &pc); break;
       default :
-        luaL_error(st->L, "unknown read code");
+        luaL_error(st->L, "unknown read opcode");
     }
 
-reset_repeat:
     st->repeat = 1;
-
-next_loop:
-    ;
   }
 }
 
