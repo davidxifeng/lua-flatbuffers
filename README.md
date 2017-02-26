@@ -8,6 +8,9 @@ Reading from **trusted** FlatBuffers is pretty stable now, but be careful
 that bad input buffer could **crash** your process, I didn't check the
 buffer border now.
 
+Please feel free to send *pull request*!
+
+如果您需要TODO里面的功能，可以在issue里提出，也非常欢迎发送pull request。
 
 # Usage
 
@@ -26,7 +29,7 @@ your_message_as_a_lua_table = FlatBuffersSchema:decode('a buffer encode a messag
 
 当前只支持Lua 5.3
 
-只实现了我用到的FlatBuffers的读功能，后续会把缺失的功能补上。
+只实现了我用到的FlatBuffers的读功能，后续有时间会把缺失的功能补上。
 
 开发计划：
 
