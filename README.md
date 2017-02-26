@@ -14,7 +14,9 @@ buffer border now.
 
 ```lua
 
-FlatBuffersSchema = FlatBuffers.bfbs('flatc --binary --schema test.fb')
+os.execute 'flatc --binary --schema test.fb'
+
+FlatBuffersSchema = FlatBuffers.bfbs('test.bfbs')
 
 your_message_as_a_lua_table = FlatBuffersSchema:decode('a buffer encode a message in FlatBuffers format')
 
