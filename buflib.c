@@ -232,6 +232,9 @@ static void read_float64(struct State *st) {
 }
 
 static void read_string(struct State *st, const char **s) {
+  // s[n]
+  // s: zero-terminated string
+  // s[1-4]: header + string
   uint32_t sz = get_opt_int_size(st, s, 0, 0, 4);
 
   while (st->repeat -- > 0) {
@@ -241,6 +244,9 @@ static void read_string(struct State *st, const char **s) {
       check_move_pointer(slen + 1); // skip a terminal zero
     } else {
       uint32_t slen = unpackint(st, st->pointer, st->little, sz, 0);
+      if (st->buffer_size != 0 && st->pointer + sz + slen - st->buffer > st->buffer_size) {
+        luaL_error(st->L, "read string: out of buffer");
+      }
       lua_pushlstring(st->L, st->pointer + sz, slen);
       check_move_pointer(sz + slen);
     }
@@ -368,8 +374,8 @@ static int buf_read (lua_State *L) {
 
   if (lua_type(L, 1) == LUA_TNUMBER) {
     st.pointer = st.buffer = (void *)(luaL_checkinteger(L, 1));
-  }
-  else {
+    st.buffer_size = 0; // unknown buffer size
+  } else {
     st.pointer = st.buffer = luaL_checklstring(L, 1, &st.buffer_size);
   }
 
