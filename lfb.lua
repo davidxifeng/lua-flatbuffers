@@ -1,7 +1,6 @@
 local assert, type = assert, type
 
 local string  = require 'stringx'
-local inspect = require 'inspect'
 
 string.read   = require 'buffer'.read
 
@@ -90,7 +89,6 @@ end
 
 local function read_table_type(buf, offset)
   local r = {}
-  if field == 0 then return r end
   local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
   local fields = buf:read(vt_reader:format(offset))
 
@@ -168,7 +166,7 @@ local function parse_object(buf, offset)
   r.fields = read_table_array(buf, offset, fields[2], read_table_field)
 
   local fields_array = {}
-  for i, v in ipairs(r.fields) do
+  for _, v in ipairs(r.fields) do
     fields_array[v.id + 1] = v -- id: 0-based lua array index: 1-based
   end
   r.fields_array = fields_array
@@ -204,7 +202,7 @@ local function parse_enum(buf, offset)
   r.values = read_table_array(buf, offset, fields[2], parse_enum_val)
 
   local t = {}
-  for i, v in ipairs(r.values) do t[v.value] = v end
+  for _, v in ipairs(r.values) do t[v.value] = v end
   r.values_lookup_dict = t
 
   r.is_union = read_bool(buf, offset, fields[3], false)
@@ -281,8 +279,6 @@ local field_type_reader = {
 local decode_table, decode_array
 
 local function decode_struct(buf, offset, table_info)
-  local init_offset = offset
-
   local r = {}
 
   for _, field_info in ipairs(table_info.fields) do
@@ -318,12 +314,12 @@ function decode_array(schema, field_type, buf, offset, fcb)
 
   elseif element_type == BaseType.String then
 
-    local r = {}
+    local result = {}
     for i = 1, size do
-      r[i] = buf:read(('< +%d =$u4 +$1 s4'):format(addr))
+      result[i] = buf:read(('< +%d =$u4 +$1 s4'):format(addr))
       addr = addr + 4
     end
-    return r
+    return result
 
   elseif element_type == BaseType.Obj then
     local ti = schema.objects[field_type.index + 1] -- 1-based index

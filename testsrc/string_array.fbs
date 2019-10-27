@@ -1,0 +1,10 @@
+namespace lfb;
+
+table Test {
+  f1 : [string];
+}
+
+root_type Test;
+
+file_extension "lfb";
+file_identifier "TEST"; // exactly 4 chars
