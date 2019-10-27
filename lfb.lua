@@ -60,11 +60,12 @@ local field_reader = {
 }
 
 local function simple_reader(fb_type)
-  return function (buf, offset, field, dv)
+  local type_reader = field_reader[fb_type]
+  return function (buf, offset, field, default_value)
     if field ~= 0 then
-      return buf:read(field_reader[fb_type]:format(offset + field))
+      return buf:read(type_reader:format(offset + field))
     else
-      return dv
+      return default_value
     end
   end
 end
