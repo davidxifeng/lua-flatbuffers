@@ -343,12 +343,27 @@ function decode_array(schema, field_type, buf, offset, fcb)
   end
 end
 
+--[[
+
+--]]
 function decode_table(schema, buf, offset, table_info, fcb)
   local fields_info = table_info.fields_array
 
   if table_info.is_struct then return decode_struct(buf, offset, table_info) end
 
+  -- table starts with signed offset to a v-table
+  -- elements of vtable are all type of unsigned int 16
+  -- vtable: [ size of vtable, size of table, N offsets]
+
   local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
+  --                        ^     ^  ^      ^
+  --                        |     |  |      | 读取(vtable-size - 4) / 2 个u16
+  --                        |     |  |
+  --                        |     |  | size of vtable, including this field
+  --                        |     |
+  --                        |     | vtable start = object start - offset
+  --                        |
+  --                        | i4: offset to vtable
   local fields = buf:read(vt_reader:format(offset))
 
   local r = {}

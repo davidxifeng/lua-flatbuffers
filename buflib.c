@@ -326,8 +326,24 @@ static void run_instructions(struct State * st) {
           continue;
         }
 
-      case '+': st->pointer += get_argument(st, &pc, 1); continue;
-      case '-': st->pointer -= get_argument(st, &pc, 1); continue;
+      case '+':
+        {
+          st->pointer += get_argument(st, &pc, 1);
+          int64_t offset = st->pointer - st->buffer;
+          if (offset < 0 || offset > st->buffer_size) {
+            luaL_error(st->L, "+ move out of buffer");
+          }
+          continue;
+        }
+      case '-':
+        {
+          st->pointer -= get_argument(st, &pc, 1);
+          int64_t offset = st->pointer - st->buffer;
+          if (offset < 0 || offset > st->buffer_size) {
+            luaL_error(st->L, "- move out of buffer");
+          }
+          continue;
+        }
       case '*':
         {
           if (st->repeat > 1) luaL_error(st->L, "duplicate repeat flag");
@@ -401,3 +417,5 @@ LUA_API int luaopen_buffer (lua_State *L) {
 
   return 1;
 }
+
+// vim: tabstop=2 softtabstop=2 shiftwidth=2 smarttab expandtab shiftround

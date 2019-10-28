@@ -17,7 +17,8 @@ endif
 .PHONY: all test clean
 
 all: buffer.so inspect.lua
-	@./testsrc/string_array.lua
+	# @./testsrc/string_array.lua
+	@./testsrc/buf_read_test.lua
 
 buffer.so: buflib.c buflib.inl
 	$(CC) $(SHARED_LIB) -o $@ $(CFLAGS) $<
