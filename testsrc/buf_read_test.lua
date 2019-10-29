@@ -30,7 +30,16 @@ local buf = ('030000006c7561'):from_hex()
 print('buf size: ', # buf, buf)
 print(buf_read(buf, 's4'))
 
+-- move pointer
 print(buf_read_ok(buf, '+7'))
 print(buf_read_ok(buf, '+2 +5 -7'))
 print(buf_read_error(buf, '+2 +5 -8'))
 
+-- read basic value
+buf = ('0100'):from_hex()
+print(buf_read_ok(buf, 'b'))
+print(buf_read_ok(buf, 'b1'))
+print(buf_read_ok(buf, 'b1 b1'))
+print(buf_read_ok(buf, '*2 b1'))
+print(buf_read_error(buf, '*3 b1'))
+print(buf_read_error(buf, 'b1 b1 b1'))

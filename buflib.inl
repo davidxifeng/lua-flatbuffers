@@ -39,9 +39,13 @@
  -[n|%n|()] 当前指针向后移动n个字节
 
  = 本次读不移动指针
- *[n|$n|()] 下一项操作 重复n次(todo 复合操作) n >= 1
+ * 重复读标记, 下一项操作 重复n次 n >= 1, 当结果没有放入table时,当前限制最大值127
+ * A: 数值字面量
+ *$B: 临时栈空间中的变量. $1, $2
+ *[C]: Lua数值表达式, 支持使用临时栈空间变量. *[ $1 + 2]
 
- { 括号中的内容保存到table中 }
+
+ { 括号中的内容保存到table中,不能嵌套table }
 
  [@ or ^] 返回当前位置相当于buffer首地址的偏移
  b[n] bool值 默认1
@@ -65,6 +69,7 @@ struct State {
   int          create_ref;    // &
   int          create_var;    // $
   int          dont_move;     // =
+
   int          in_tb;         // {}
   int          tb_idx;        // table index
 
