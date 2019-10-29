@@ -29,24 +29,19 @@ your_message_as_a_lua_table = FlatBuffersSchema:decode('a buffer encode a messag
 
 当前只支持Lua 5.3
 
-只实现了我用到的FlatBuffers的读功能，后续有时间会把缺失的功能补上。
 
 开发计划：
 
-* 写FlatBuffers
 * buffer:read函数对指针读范围进行安全检查
 * 不使用string元表
 * 直接解析schema文件, 不再依赖flatc编译schema到bfbs或json
-* 支持Lua 5.1/5.2和luajit
-* 添加文档和测试
+* 写FlatBuffers
 
 ## TODO
 
-* write flatbuffers
-* parse schema, do not depend flatc to compile schema to bfbs/json
-* add support for Lua 5.1/5.2 and luajit
-* add documentation & tests & examples
 * safe buffer read library
+* parse schema, do not depend flatc to compile schema to bfbs/json
+* write flatbuffers
 
 
 [flatbuffers]: https://github.com/google/flatbuffers
