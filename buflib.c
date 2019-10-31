@@ -113,8 +113,7 @@ unpackint (struct State *st, const char *str,
       lua_Unsigned mask = (lua_Unsigned)1 << (size*NB - 1);
       res = ((res ^ mask) - mask);  /* do sign extension */
     }
-  }
-  else if (size > SIZE_LUA_INTEGER) {  /* must check unread bytes */
+  } else if (size > SIZE_LUA_INTEGER) {  /* must check unread bytes */
     int mask = (!issigned || (lua_Integer)res >= 0) ? 0 : MC;
     for (i = limit; i < size; i++) {
       if ((unsigned char)str[islittle ? i : size - 1 - i] != mask)
@@ -157,20 +156,20 @@ static void copy_with_endian (volatile char *dest, volatile const char *src,
   }
 }
 
-#define CHECK_MOVE_POINTER(sz) \
-  if (st->dont_move == 0) st->pointer += (sz); else st->dont_move = 0
+#define CHECK_MOVE_POINTER(len) \
+  if (st->dont_move == 0) st->pointer += (len); else st->dont_move = 0
 
 static void read_boolean(struct State * st, const char **s) {
-  uint32_t data_bytes = get_opt_int_size(st, s, 1, 1, 8);
+  uint32_t len = get_opt_int_size(st, s, 1, 1, 8);
 
   while (st->repeat-- > 0) {
 
-    if (st->pointer + data_bytes - st->buffer > st->buffer_size) {
+    if (st->pointer + len - st->buffer > st->buffer_size) {
       luaL_error(st->L, "read boolean: out of buffer %s", *s);
     }
 
-    lua_pushboolean(st->L, unpackint(st, st->pointer, st->little, data_bytes, 0));
-    CHECK_MOVE_POINTER(data_bytes);
+    lua_pushboolean(st->L, unpackint(st, st->pointer, st->little, len, 0));
+    CHECK_MOVE_POINTER(len);
 
     if (st->in_tb == 0) {
       st->ret++;
@@ -181,34 +180,31 @@ static void read_boolean(struct State * st, const char **s) {
   }
 }
 
-static void read_integer(struct State *st, const char **s, int is_sign) {
-  uint32_t sz = get_opt_int_size(st, s, 4, 1, 8);
+static void read_integer(struct State *st, const char **s, int is_signed) {
+  uint32_t len = get_opt_int_size(st, s, 4, 1, 8);
 
-  if (st->create_var != 0) {
-    st->create_var = 0;
-
-    int64_t num = unpackint(st, st->pointer, st->little, sz, is_sign);
-    CHECK_MOVE_POINTER(sz);
-    st->variable[st->index++] = num;
-  } else {
-
+  if (st->pointer + len * st->repeat - st->buffer > st->buffer_size) {
+    luaL_error(st->L, "read integer: out of buffer");
+  }
+  while (st->repeat-- > 0) {
+    if (st->create_var != 0) {
+      st->create_var = 0;
+    }
     if (st->create_ref != 0) {
       st->create_ref = 0;
-
-      int64_t num = unpackint(st, st->pointer, st->little, sz, is_sign);
-      st->variable[st->index++] = num;
     }
+    int64_t num = unpackint(st, st->pointer, st->little, len, is_signed);
+    CHECK_MOVE_POINTER(len);
+    st->variable[st->index++] = num;
 
-    while (st->repeat-- > 0) {
-      lua_pushinteger(st->L, unpackint(st, st->pointer, st->little, sz, is_sign));
-      CHECK_MOVE_POINTER(sz);
+    lua_pushinteger(st->L, num);
+    CHECK_MOVE_POINTER(len);
 
-      if (st->in_tb == 0) {
-        st->ret++;
-        check_stack_space(st);
-      } else {
-        lua_rawseti(st->L, -2, st->tb_idx++);
-      }
+    if (st->in_tb == 0) {
+      st->ret++;
+      check_stack_space(st);
+    } else {
+      lua_rawseti(st->L, -2, st->tb_idx++);
     }
   }
 }
@@ -247,20 +243,20 @@ static void read_string(struct State *st, const char **s) {
   // s[n]
   // s: zero-terminated string
   // s[1-4]: header + string
-  uint32_t sz = get_opt_int_size(st, s, 0, 0, 4);
+  uint32_t len = get_opt_int_size(st, s, 0, 0, 4);
 
   while (st->repeat -- > 0) {
-    if (sz == 0) {
+    if (len == 0) {
       size_t slen = strlen(st->pointer);
       lua_pushlstring(st->L, st->pointer, slen);
       CHECK_MOVE_POINTER(slen + 1); // skip a terminal zero
     } else {
-      uint32_t slen = unpackint(st, st->pointer, st->little, sz, 0);
-      if (st->buffer_size != 0 && st->pointer + sz + slen - st->buffer > st->buffer_size) {
+      uint32_t slen = unpackint(st, st->pointer, st->little, len, 0);
+      if (st->buffer_size != 0 && st->pointer + len + slen - st->buffer > st->buffer_size) {
         luaL_error(st->L, "read string: out of buffer");
       }
-      lua_pushlstring(st->L, st->pointer + sz, slen);
-      CHECK_MOVE_POINTER(sz + slen);
+      lua_pushlstring(st->L, st->pointer + len, slen);
+      CHECK_MOVE_POINTER(len + slen);
     }
 
     if (st->in_tb == 0) {
@@ -273,12 +269,12 @@ static void read_string(struct State *st, const char **s) {
 }
 
 static void read_fixed_string(struct State *st, const char **s) {
-  uint32_t sz = read_optional_integer(s, 1);
-  if (sz == 0) luaL_error(st->L, "bad n in 'c[n]'");
+  uint32_t len = read_optional_integer(s, 1);
+  if (len == 0) luaL_error(st->L, "bad n in 'c[n]'");
 
   while (st->repeat-- > 0) {
-    lua_pushlstring(st->L, st->pointer, sz);
-    CHECK_MOVE_POINTER(sz);
+    lua_pushlstring(st->L, st->pointer, len);
+    CHECK_MOVE_POINTER(len);
     if (st->in_tb == 0) {
       st->ret++;
       check_stack_space(st);
@@ -334,10 +330,11 @@ static void run_instructions(struct State * st) {
 
           // 变量栈增长
           int64_t cur_size = st->variable[0];
-          if (st->index >= cur_size) {
-            int64_t * ns = alloca(sizeof(int64_t) * (cur_size + MEM_GROW_SIZE));
-            memmove(ns + 1, st->variable + 1, cur_size * sizeof(int64_t));
-            ns[0] = cur_size + MEM_GROW_SIZE;
+          if (cur_size - st->index - st->repeat < 0) {
+            int grow_size = st->repeat + MEM_GROW_SIZE;
+            int64_t * ns = alloca(sizeof(int64_t) * (cur_size + grow_size));
+            ns[0] = cur_size + grow_size;
+            memmove(ns + 1, st->variable + 1, sizeof(int64_t) * cur_size);
             st->variable = ns;
           }
 

@@ -39,8 +39,9 @@
  -[n|%n|()] 当前指针向后移动n个字节
 
  = 本次读不移动指针
+
  * 重复读标记, 下一项操作 重复n次 n >= 1, 当结果没有放入table时,当前限制最大值127
- * A: 数值字面量
+ *A: 数值字面量
  *$B: 临时栈空间中的变量. $1, $2
  *[C]: Lua数值表达式, 支持使用临时栈空间变量. *[ $1 + 2]
 
@@ -66,8 +67,8 @@ struct State {
 
   int64_t    * variable;      // 变量数组
   int          index;         // 变量序号
-  int          create_ref;    // &
-  int          create_var;    // $
+  int          create_var;    // $ 中间变量,不作为结果返回
+  int          create_ref;    // & 可以引用,作为结果返回
   int          dont_move;     // =
 
   int          in_tb;         // {}
