@@ -1,6 +1,6 @@
 # lua-flatbuffers
 
-Lua 5.3 library for [FlatBuffers][flatbuffers]
+Lua 5.3 library for *reading* [FlatBuffers][flatbuffers]
 
 ## Status
 
