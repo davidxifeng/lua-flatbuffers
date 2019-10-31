@@ -62,7 +62,7 @@
 struct State {
   const char * buffer;        // buffer 首地址
   const char * pointer;       // 当前指针位置
-  size_t       buffer_size;   // buffer size
+  size_t       buffer_size;   // buffer size, 当直接传递地址,此值为0时,不检查边界安全
   const char * instructions;  // 指令列表
 
   int64_t    * variable;      // 变量数组

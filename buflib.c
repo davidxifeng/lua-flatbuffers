@@ -162,12 +162,10 @@ static void copy_with_endian (volatile char *dest, volatile const char *src,
 static void read_boolean(struct State * st, const char **s) {
   uint32_t len = get_opt_int_size(st, s, 1, 1, 8);
 
+  if (st->buffer_size != 0 && st->pointer + st->repeat * len - st->buffer > st->buffer_size) {
+    luaL_error(st->L, "read boolean: out of buffer");
+  }
   while (st->repeat-- > 0) {
-
-    if (st->pointer + len - st->buffer > st->buffer_size) {
-      luaL_error(st->L, "read boolean: out of buffer %s", *s);
-    }
-
     lua_pushboolean(st->L, unpackint(st, st->pointer, st->little, len, 0));
     CHECK_MOVE_POINTER(len);
 
@@ -183,28 +181,30 @@ static void read_boolean(struct State * st, const char **s) {
 static void read_integer(struct State *st, const char **s, int is_signed) {
   uint32_t len = get_opt_int_size(st, s, 4, 1, 8);
 
-  if (st->pointer + len * st->repeat - st->buffer > st->buffer_size) {
+  if (st->buffer_size != 0 && st->pointer + len * st->repeat - st->buffer > st->buffer_size) {
     luaL_error(st->L, "read integer: out of buffer");
   }
+  int c_var = st->create_var;
+  int c_ref = st->create_ref;
+  st->create_ref = 0;
+  st->create_var = 0;
   while (st->repeat-- > 0) {
-    if (st->create_var != 0) {
-      st->create_var = 0;
-    }
-    if (st->create_ref != 0) {
-      st->create_ref = 0;
-    }
     int64_t num = unpackint(st, st->pointer, st->little, len, is_signed);
     CHECK_MOVE_POINTER(len);
-    st->variable[st->index++] = num;
 
-    lua_pushinteger(st->L, num);
-    CHECK_MOVE_POINTER(len);
-
-    if (st->in_tb == 0) {
-      st->ret++;
-      check_stack_space(st);
+    if (c_var != 0) {
+      st->variable[st->index++] = num;
     } else {
-      lua_rawseti(st->L, -2, st->tb_idx++);
+      if (c_ref != 0) {
+        st->variable[st->index++] = num;
+      }
+      lua_pushinteger(st->L, num);
+      if (st->in_tb == 0) {
+        st->ret++;
+        check_stack_space(st);
+      } else {
+        lua_rawseti(st->L, -2, st->tb_idx++);
+      }
     }
   }
 }
@@ -337,7 +337,6 @@ static void run_instructions(struct State * st) {
             memmove(ns + 1, st->variable + 1, sizeof(int64_t) * cur_size);
             st->variable = ns;
           }
-
           if (c == '$') st->create_var = 1; else st->create_ref = 1;
           continue;
         }
@@ -346,7 +345,7 @@ static void run_instructions(struct State * st) {
         {
           st->pointer += calc_integral_expression(st, &pc, 1);
           int64_t offset = st->pointer - st->buffer;
-          if (offset < 0 || offset > st->buffer_size) {
+          if (offset < 0 || (st->buffer_size != 0 && offset > st->buffer_size)) {
             luaL_error(st->L, "+ move out of buffer");
           }
           continue;
@@ -355,7 +354,7 @@ static void run_instructions(struct State * st) {
         {
           st->pointer -= calc_integral_expression(st, &pc, 1);
           int64_t offset = st->pointer - st->buffer;
-          if (offset < 0 || offset > st->buffer_size) {
+          if (offset < 0 || (st->buffer_size != 0 && offset > st->buffer_size)) {
             luaL_error(st->L, "- move out of buffer");
           }
           continue;
@@ -400,9 +399,10 @@ static void run_instructions(struct State * st) {
 
 static int buf_read (lua_State *L) {
   struct State st = {
-    .repeat = 1, .create_ref = 0, .create_var = 0, .dont_move = 0,
-    .ret = 0, .L = L, .little = 1, .stack_space = INIT_LUA_STACK_SPACE,
-    .in_tb = 0, .tb_idx = 0,
+    .L = L, .repeat = 1, .little = 1,
+    .stack_space = INIT_LUA_STACK_SPACE,
+    .create_var = 0, .create_ref = 0, .dont_move = 0,
+    .ret = 0, .in_tb = 0, .tb_idx = 0,
   };
 
   if (lua_type(L, 1) == LUA_TNUMBER) {

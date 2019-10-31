@@ -56,7 +56,8 @@ print(buf_read_ok(buf, '+1 i1'))
 
 buf = ('0100FF0100'):from_hex()
 print('should be two 1: ', buf_read_ok(buf, '&i2 +$1 i2'))
-buf = ('0102FF0100FF'):from_hex()
+buf = ('0102 FF01 000F'):from_hex()
 print(buf_read_ok(buf, '*2 &i1 +$1 +$1 i1'))
 print(buf_read_ok(buf, '*2 &i1 +$1 +$2 i1'))
+print(buf_read_ok(buf, '*6 &i1'))
 
