@@ -10,7 +10,7 @@ local function check_ok(ok, msg, ...)
 	if ok then
 		return msg, ...
 	else
-		print('[error] ', msg, debug.traceback())
+		return '[error] ', msg, debug.traceback()
 	end
 end
 
@@ -19,8 +19,10 @@ local function buf_read_ok(buf, ins)
 end
 
 local function check_failed(ok, msg, ...)
-	if not ok then
-		print('[ok] failed with: ', msg)
+	if ok then
+		return msg, ...
+	else
+		return 'expected error : ', msg, ...
 	end
 end
 
@@ -56,8 +58,12 @@ print(buf_read_ok(buf, '+1 i1'))
 
 buf = ('0100FF0100'):from_hex()
 print('should be two 1: ', buf_read_ok(buf, '&i2 +$1 i2'))
+
 buf = ('0102 FF01 000F'):from_hex()
 print(buf_read_ok(buf, '*2 &i1 +$1 +$1 i1'))
 print(buf_read_ok(buf, '*2 &i1 +$1 +$2 i1'))
 print(buf_read_ok(buf, '*6 &i1'))
+print(buf_read_ok(buf, '$i1 +$1 *4 i1'))
+print(buf_read_error(buf, '*7 i1'))
+print(buf_read_error(buf, '$i1 +$1 *4 i1'))
 

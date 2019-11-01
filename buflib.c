@@ -129,12 +129,6 @@ unpackint (struct State *st, const char *str,
 #define INIT_LUA_STACK_SPACE 32
 #define LUA_STACK_GROW_SPACE 16
 
-static void check_stack_space(struct State *st) {
-  if (st->ret + 2 >= st->stack_space) {
-    st->stack_space += LUA_STACK_GROW_SPACE;
-    luaL_checkstack(st->L, st->stack_space, "too many results");
-  }
-}
 
 union Ftypes {
   float f;
@@ -159,6 +153,11 @@ static void copy_with_endian (volatile char *dest, volatile const char *src,
 #define CHECK_MOVE_POINTER(len) \
   if (st->dont_move == 0) st->pointer += (len); else st->dont_move = 0
 
+#define CHECK_STACK_SPACE(st) \
+  if (st->ret + 2 >= st->stack_space) \
+    st->stack_space += LUA_STACK_GROW_SPACE, \
+    luaL_checkstack(st->L, st->stack_space, "too many results")
+
 static void read_boolean(struct State * st, const char **s) {
   uint32_t len = get_opt_int_size(st, s, 1, 1, 8);
 
@@ -171,7 +170,7 @@ static void read_boolean(struct State * st, const char **s) {
 
     if (st->in_tb == 0) {
       st->ret++;
-      check_stack_space(st);
+      CHECK_STACK_SPACE(st);
     } else {
       lua_rawseti(st->L, -2, st->tb_idx++);
     }
@@ -181,7 +180,7 @@ static void read_boolean(struct State * st, const char **s) {
 static void read_integer(struct State *st, const char **s, int is_signed) {
   uint32_t len = get_opt_int_size(st, s, 4, 1, 8);
 
-  if (st->buffer_size != 0 && st->pointer + len * st->repeat - st->buffer > st->buffer_size) {
+  if (st->buffer_size != 0 && st->pointer + len * st->repeat > st->buffer + st->buffer_size) {
     luaL_error(st->L, "read integer: out of buffer");
   }
   int c_var = st->create_var;
@@ -201,7 +200,7 @@ static void read_integer(struct State *st, const char **s, int is_signed) {
       lua_pushinteger(st->L, num);
       if (st->in_tb == 0) {
         st->ret++;
-        check_stack_space(st);
+        CHECK_STACK_SPACE(st);
       } else {
         lua_rawseti(st->L, -2, st->tb_idx++);
       }
@@ -217,7 +216,7 @@ static void read_float32(struct State *st) {
     lua_pushnumber(st->L, (lua_Number)u.f);
     if (st->in_tb == 0) {
       st->ret++;
-      check_stack_space(st);
+      CHECK_STACK_SPACE(st);
     } else {
       lua_rawseti(st->L, -2, st->tb_idx++);
     }
@@ -232,7 +231,7 @@ static void read_float64(struct State *st) {
     lua_pushnumber(st->L, (lua_Number)u.d);
     if (st->in_tb == 0) {
       st->ret++;
-      check_stack_space(st);
+      CHECK_STACK_SPACE(st);
     } else {
       lua_rawseti(st->L, -2, st->tb_idx++);
     }
@@ -261,7 +260,7 @@ static void read_string(struct State *st, const char **s) {
 
     if (st->in_tb == 0) {
       st->ret++;
-      check_stack_space(st);
+      CHECK_STACK_SPACE(st);
     } else {
       lua_rawseti(st->L, -2, st->tb_idx++);
     }
@@ -277,7 +276,7 @@ static void read_fixed_string(struct State *st, const char **s) {
     CHECK_MOVE_POINTER(len);
     if (st->in_tb == 0) {
       st->ret++;
-      check_stack_space(st);
+      CHECK_STACK_SPACE(st);
     } else {
       lua_rawseti(st->L, -2, st->tb_idx++);
     }
@@ -312,7 +311,7 @@ static void run_instructions(struct State * st) {
           if (st->in_tb != 0) luaL_error(st->L, "nested table detected");
           st->in_tb = st->tb_idx = 1;
           st->ret++;
-          check_stack_space(st);
+          CHECK_STACK_SPACE(st);
           lua_createtable(st->L, 32, 0);
           continue;
         }
@@ -376,7 +375,7 @@ static void run_instructions(struct State * st) {
           lua_pushinteger(st->L, st->pointer - st->buffer);
           if (st->in_tb == 0) {
             st->ret++;
-            check_stack_space(st);
+            CHECK_STACK_SPACE(st);
           } else {
             lua_rawseti(st->L, -2, st->tb_idx++);
           }
