@@ -363,7 +363,7 @@ static void run_instructions(struct State * st) {
           st->pointer += calc_integral_expression(st, &pc, 1);
           int64_t offset = st->pointer - st->buffer;
           if (offset < 0 || (st->buffer_size != 0 && offset > st->buffer_size)) {
-            luaL_error(st->L, "+ move out of buffer");
+            luaL_error(st->L, "+ move out of buffer: %d", offset);
           }
           continue;
         }
@@ -372,7 +372,7 @@ static void run_instructions(struct State * st) {
           st->pointer -= calc_integral_expression(st, &pc, 1);
           int64_t offset = st->pointer - st->buffer;
           if (offset < 0 || (st->buffer_size != 0 && offset > st->buffer_size)) {
-            luaL_error(st->L, "- move out of buffer");
+            luaL_error(st->L, "- move out of buffer: %d", offset);
           }
           continue;
         }
