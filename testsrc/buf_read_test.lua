@@ -65,5 +65,27 @@ print(buf_read_ok(buf, '*2 &i1 +$1 +$2 i1'))
 print(buf_read_ok(buf, '*6 &i1'))
 print(buf_read_ok(buf, '$i1 +$1 *4 i1'))
 print(buf_read_error(buf, '*7 i1'))
-print(buf_read_error(buf, '$i1 +$1 *4 i1'))
+print(buf_read_error(buf, '$i1 +$1 *5 i1'))
+
+-- abc
+buf = ('61 62 63 00'):from_hex()
+print(buf_read_ok(buf, 's'))
+buf = ('61 62 63'):from_hex()
+print(buf_read_error(buf, 's'))
+print(buf_read_ok(buf, 'c1'))
+print(buf_read_ok(buf, 'c3'))
+print(buf_read_error(buf, 'c4'))
+
+buf = ('03 61 62 63'):from_hex()
+print(buf_read_ok(buf, 's1'))
+
+buf = ('03 00 61 62 63'):from_hex()
+print(buf_read_ok(buf, '< s2'))
+
+buf = ('03 00 61 62 63'):from_hex()
+print(buf_read_error(buf, '> s2'))
+
+buf = ('00 03 61 62 63'):from_hex()
+print(buf_read_ok(buf, '> s2'))
+
 

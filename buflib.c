@@ -161,7 +161,7 @@ static void copy_with_endian (volatile char *dest, volatile const char *src,
 static void read_boolean(struct State * st, const char **s) {
   uint32_t len = get_opt_int_size(st, s, 1, 1, 8);
 
-  if (st->buffer_size != 0 && st->pointer + st->repeat * len - st->buffer > st->buffer_size) {
+  if (st->buffer_size != 0 && st->pointer + st->repeat * len > st->buffer_end) {
     luaL_error(st->L, "read boolean: out of buffer");
   }
   while (st->repeat-- > 0) {
@@ -180,7 +180,7 @@ static void read_boolean(struct State * st, const char **s) {
 static void read_integer(struct State *st, const char **s, int is_signed) {
   uint32_t len = get_opt_int_size(st, s, 4, 1, 8);
 
-  if (st->buffer_size != 0 && st->pointer + len * st->repeat > st->buffer + st->buffer_size) {
+  if (st->buffer_size != 0 && st->pointer + len * st->repeat > st->buffer_end) {
     luaL_error(st->L, "read integer: out of buffer");
   }
   int c_var = st->create_var;
@@ -209,6 +209,10 @@ static void read_integer(struct State *st, const char **s, int is_signed) {
 }
 
 static void read_float32(struct State *st) {
+  if (st->buffer_size != 0 && st->pointer + 4 * st->repeat > st->buffer_end) {
+    luaL_error(st->L, "read float32: out of buffer");
+  }
+
   while (st->repeat-- > 0) {
     volatile union Ftypes u;
     copy_with_endian(u.buff, st->pointer, 4, st->little);
@@ -224,11 +228,16 @@ static void read_float32(struct State *st) {
 }
 
 static void read_float64(struct State *st) {
+  if (st->buffer_size != 0 && st->pointer + 8 * st->repeat > st->buffer_end) {
+    luaL_error(st->L, "read float64: out of buffer");
+  }
+
   while (st->repeat-- > 0) {
     volatile union Ftypes u;
     copy_with_endian(u.buff, st->pointer, 8, st->little);
-    CHECK_MOVE_POINTER(8);
+    CHECK_MOVE_POINTER(8); // TODO 重复读时其实没有必要检测指针移动, 优化此处
     lua_pushnumber(st->L, (lua_Number)u.d);
+    // TODO 是否为数组模式也不用在重复读循环中每次检测
     if (st->in_tb == 0) {
       st->ret++;
       CHECK_STACK_SPACE(st);
@@ -247,12 +256,16 @@ static void read_string(struct State *st, const char **s) {
   while (st->repeat -- > 0) {
     if (len == 0) {
       size_t slen = strlen(st->pointer);
+      int max_size = st->buffer_size - (st->pointer - st->buffer) - 1;
+      if (st->buffer_size != 0 && slen > max_size) {
+        luaL_error(st->L, "read string s[0]: out of buffer");
+      }
       lua_pushlstring(st->L, st->pointer, slen);
       CHECK_MOVE_POINTER(slen + 1); // skip a terminal zero
     } else {
       uint32_t slen = unpackint(st, st->pointer, st->little, len, 0);
-      if (st->buffer_size != 0 && st->pointer + len + slen - st->buffer > st->buffer_size) {
-        luaL_error(st->L, "read string: out of buffer");
+      if (st->buffer_size != 0 && st->pointer + len + slen > st->buffer_end) {
+        luaL_error(st->L, "read string s[%d]: out of buffer", slen);
       }
       lua_pushlstring(st->L, st->pointer + len, slen);
       CHECK_MOVE_POINTER(len + slen);
@@ -269,7 +282,12 @@ static void read_string(struct State *st, const char **s) {
 
 static void read_fixed_string(struct State *st, const char **s) {
   uint32_t len = read_optional_integer(s, 1);
-  if (len == 0) luaL_error(st->L, "bad n in 'c[n]'");
+  if (len == 0) {
+    luaL_error(st->L, "read fixed string c[%d]: zero", len);
+  }
+  if (st->buffer_size != 0 && st->pointer + len > st->buffer_end) {
+    luaL_error(st->L, "read fixed string c[%d]: out of buffer", len);
+  }
 
   while (st->repeat-- > 0) {
     lua_pushlstring(st->L, st->pointer, len);
@@ -409,6 +427,7 @@ static int buf_read (lua_State *L) {
     st.buffer_size = 0; // unknown buffer size
   } else {
     st.pointer = st.buffer = luaL_checklstring(L, 1, &st.buffer_size);
+    st.buffer_end = st.buffer + st.buffer_size;
   }
 
   st.instructions = luaL_checkstring(L, 2);
