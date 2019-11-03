@@ -1,8 +1,6 @@
 local assert, type = assert, type
 
-local string  = require 'stringx'
-
-string.read   = require 'buffer'.read
+local buf_read = require 'buffer'.read
 
 local BaseType = {
     None   = 0,
@@ -62,7 +60,7 @@ local function simple_reader(fb_type)
   local type_reader = field_reader[fb_type]
   return function (buf, offset, field, default_value)
     if field ~= 0 then
-      return buf:read(type_reader:format(offset + field))
+      return buf_read(buf, type_reader:format(offset + field))
     else
       return default_value
     end
@@ -83,14 +81,14 @@ local read_double = simple_reader 'double'
 local read_string = simple_reader 'string'
 
 local function subtable_offset(buf, offset)
-  return buf:read(('< +%d =$u4 +$1 @'):format(offset)) -- TODO confirm u4 or i4
+  return buf_read(buf, ('< +%d =$u4 +$1 @'):format(offset)) -- TODO confirm u4 or i4
 end
 
 
 local function read_table_type(buf, offset)
   local r = {}
   local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
-  local fields = buf:read(vt_reader:format(offset))
+  local fields = buf_read(buf, vt_reader:format(offset))
 
   r.base_type = read_byte(buf, offset, fields[1])
   if fields[2] ~= 0 then
@@ -105,7 +103,7 @@ end
 local function parse_key_value(buf, offset)
   local r = {}
   local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
-  local fields = buf:read(vt_reader:format(offset))
+  local fields = buf_read(buf, vt_reader:format(offset))
 
   r.key = read_string(buf, offset, fields[1])
   r.value = read_string(buf, offset, fields[2])
@@ -118,9 +116,9 @@ local function read_table_array(buf, offset, field, obj_reader)
 
   local r = {}
 
-  local size, addr = buf:read(('< +%d =$u4 +$1 u4 @'):format(offset + field))
+  local size, addr = buf_read(buf, ('< +%d =$u4 +$1 u4 @'):format(offset + field))
   for i = 1, size do
-    local elem_offset = buf:read(('< +%d =$u4 +$1 @'):format(addr))
+    local elem_offset = buf_read(buf, ('< +%d =$u4 +$1 @'):format(addr))
     r[i] = obj_reader(buf, elem_offset)
 
     addr = addr + 4
@@ -131,7 +129,7 @@ end
 local function read_table_field(buf, offset)
   local r = {}
   local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
-  local fields = buf:read(vt_reader:format(offset))
+  local fields = buf_read(buf, vt_reader:format(offset))
 
   r.name = read_string(buf, offset, fields[1])
   r.type = read_table_type(buf, subtable_offset(buf, offset + fields[2]))
@@ -161,7 +159,7 @@ end
 local function parse_object(buf, offset)
   local r = {}
   local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
-  local fields = buf:read(vt_reader:format(offset))
+  local fields = buf_read(buf, vt_reader:format(offset))
   r.name = read_string(buf, offset, fields[1])
   r.fields = read_table_array(buf, offset, fields[2], read_table_field)
 
@@ -182,7 +180,7 @@ end
 local function parse_enum_val(buf, offset)
   local r = {}
   local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
-  local fields = buf:read(vt_reader:format(offset))
+  local fields = buf_read(buf, vt_reader:format(offset))
 
   r.name = read_string(buf, offset, fields[1])
   r.value = read_long(buf, offset, fields[2], 0)
@@ -196,7 +194,7 @@ end
 local function parse_enum(buf, offset)
   local r = {}
   local vt_reader = '< +%d =$i4 -$1 $u2 +2 {*[($2 - 4) // 2] u2}'
-  local fields = buf:read(vt_reader:format(offset))
+  local fields = buf_read(buf, vt_reader:format(offset))
 
   r.name = read_string(buf, offset, fields[1])
   r.values = read_table_array(buf, offset, fields[2], parse_enum_val)
@@ -218,7 +216,7 @@ end
 local function parse_schema(schema_buf)
   local r = {}
   local schema_reader = '< =&u4 +$1 =$i4 -$2 $u2 +2 {*[($3 - 4) // 2] u2}'
-  local of, fields = schema_buf:read(schema_reader)
+  local of, fields = buf_read(schema_buf, schema_reader)
 
   r.objects = read_table_array(schema_buf, of, fields[1], parse_object)
 
@@ -286,7 +284,7 @@ local function decode_struct(buf, offset, table_info)
     local basetype = field_type.base_type
     local rd = field_reader[basetype]
     local addr = offset + field_info.offset
-    r[field_info.name] = buf:read(('< +%d %s'):format(addr, rd))
+    r[field_info.name] = buf_read(buf, ('< +%d %s'):format(addr, rd))
   end
 
   return r
@@ -302,7 +300,7 @@ function decode_array(schema, field_type, buf, offset, fcb)
   --                                 |      | array size
   --                                 |
   --                                 | array offset
-  local size, addr = buf:read(array_info_reader:format(offset))
+  local size, addr = buf_read(buf, array_info_reader:format(offset))
 
   -- array的元素类型不能是array,即没有嵌套的数组
 
@@ -310,13 +308,13 @@ function decode_array(schema, field_type, buf, offset, fcb)
   if BaseType.Bool <= element_type and element_type <= BaseType.Double then
 
     local rd = field_reader[element_type]
-    return buf:read(('< +%d {*%d %s }'):format(addr, size, rd))
+    return buf_read(buf, ('< +%d {*%d %s }'):format(addr, size, rd))
 
   elseif element_type == BaseType.String then
 
     local result = {}
     for i = 1, size do
-      result[i] = buf:read(('< +%d =$u4 +$1 s4'):format(addr))
+      result[i] = buf_read(buf, ('< +%d =$u4 +$1 s4'):format(addr))
       addr = addr + 4
     end
     return result
@@ -332,7 +330,7 @@ function decode_array(schema, field_type, buf, offset, fcb)
       end
     else
       for i = 1, size do
-        local elem_offset = buf:read(('< +%d =$u4 +$1 @'):format(addr))
+        local elem_offset = buf_read(buf, ('< +%d =$u4 +$1 @'):format(addr))
         r[i] = decode_table(schema, buf, elem_offset, ti, fcb)
         addr = addr + 4
       end
@@ -364,7 +362,7 @@ function decode_table(schema, buf, offset, table_info, fcb)
   --                        |     | vtable start = object start - offset
   --                        |
   --                        | i4: offset to vtable
-  local fields = buf:read(vt_reader:format(offset))
+  local fields = buf_read(buf, vt_reader:format(offset))
 
   local r = {}
 
@@ -414,7 +412,7 @@ function decode_table(schema, buf, offset, table_info, fcb)
       -- union only contain table
 
       if v ~= 0 then
-        local union_index = buf:read(('< +%d u1'):format(offset + v))
+        local union_index = buf_read(buf, ('< +%d u1'):format(offset + v))
         local next_field_info = fields_info[i]
         local next_field_type = next_field_info.type
         local next_v = fields[i]
@@ -440,7 +438,7 @@ end
 local FlatBuffersMethods = { }
 
 function FlatBuffersMethods:decode(buf, offset, ti)
-  offset = offset or buf:read '< u4'
+  offset = offset or buf_read(buf, '< u4')
   if ti then
     ti = assert(self.objects_name_dict[ti], 'bad type name')
   else
@@ -450,7 +448,7 @@ function FlatBuffersMethods:decode(buf, offset, ti)
 end
 
 function FlatBuffersMethods:decode_ex(buf, fcb)
-  return decode_table(self, buf, buf:read '< u4', self.root_table, fcb)
+  return decode_table(self, buf, buf_read(buf, '< u4'), self.root_table, fcb)
 end
 
 local FlatBuffers = {}

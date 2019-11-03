@@ -18,7 +18,8 @@ endif
 
 all: buffer.so inspect.lua
 	# @./testsrc/string_array.lua
-	@./testsrc/buf_read_test.lua
+	# @./testsrc/buf_read_test.lua
+	@./testsrc/test.lua
 
 buffer.so: buflib.c buflib.inl
 	$(CC) $(SHARED_LIB) -o $@ $(CFLAGS) $<

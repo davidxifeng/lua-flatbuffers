@@ -17,13 +17,14 @@ static const union {
 } nativeendian = {1};
 
 
-#define isdigit(c) ('0' <= c && c <= '9')
+#define ISDIGIT(c) ('0' <= c && c <= '9')
+
 static uint32_t read_optional_integer (const char **s, uint32_t default_value) {
-  if (isdigit(**s)) {
+  if (ISDIGIT(**s)) {
     uint32_t a = 0;
     do {
       a = a * 10 + (*((*s)++) - '0');
-    } while (isdigit(**s) && a <= ((uint32_t)MAXSIZE - 9)/10);
+    } while (ISDIGIT(**s) && a <= ((uint32_t)MAXSIZE - 9)/10);
     return a;
   } else {
     return default_value;
