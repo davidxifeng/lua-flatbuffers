@@ -4,6 +4,8 @@ a work-in-progress Lua 5.3 library for *reading* [FlatBuffers][flatbuffers]
 
 ## 开发计划：
 
+*目前官方已经有了非反射版的Lua库,我自己也暂时不使用flatbuffers了,暂停开发*
+
 * [x] buffer.read: 检查buffer边界范围
 * [x] 去掉对string元表的修改
 * [ ] 写FlatBuffers
